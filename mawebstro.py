@@ -10,6 +10,7 @@ import nltk
 from nltk.tokenize import sent_tokenize
 from collections import OrderedDict
 nltk.download('punkt')
+nltk.download('punkt_tab')
 
 ### Before running this script:
 # 1. Make sure you have installed packages from requirements.txt
