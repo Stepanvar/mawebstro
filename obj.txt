@@ -1,4 +1,28 @@
-﻿import pychrome
+Objective: Generate a web-based intelligent assistant designed to help users with coding projects and learning new topics using ai-orchestrating method
+Sub-tasks to consider:
+1. Implement Objective Classification:
+Develop a classification mechanism that automatically determines whether the user's input objective is for project code generation or learning purposes.
+Utilize keyword analysis or natural language processing techniques to accurately categorize the objective.
+2. Generate Clarifying Questions (Clarification Stage):
+Based on the classified objective type, GPT AI MODEL must GENERATE at least four comprehensive and appropriate clarifying questions to better understand the user's specific needs and goals.
+Ensure the questions are tailored to the objective type:
+For project code generation:
+Ask about specific to the current objective questions, desired features, clarify potential ambiguities, etc.
+For learning objectives:
+Inquire about specific to the current objective questions, the current knowledge level, specific topics of interest, preferred learning style, potential hard themes, etc.
+3. Enhance User Control:
+Present the generated clarifying questions to the user before proceeding with the orchestration stage.
+Collect the user's responses to these questions to refine the system's understanding of the objective.
+4. Adapt Orchestrator and Prompts:
+Utilize the clarified information to create more specific and effective prompts for the GPT orchestrator.
+Ensure that the orchestrator uses the user's responses to generate tailored sub-tasks and deliver more relevant results.
+Develop separate prompt templates or strategies for each objective type to enhance the quality of interactions.
+5. Improve Overall User Experience:
+Design the system to be intuitive and easy to use, even for users with little to no programming experience.
+Provide clear instructions and feedback at each stage of the interaction.
+Incorporate error handling to manage unexpected inputs or situations gracefully.
+The project code:
+import pychrome
 import os
 import sys
 import re
@@ -157,13 +181,13 @@ def gpt_orchestrator(objective):
     # Construct the prompt
     if is_first_call:
         prompt = (
-            f"Based on the following objective, please break down the objective into all sub-tasks."
-            f"IF AND ONLY IF THE MAIN OBJECTIVE has been FULLY ACHIEVED, so SEVERAL TASKS HAVE BEEN COMPLETED, include the phrase 'The task is complete:' at the beginning of your response.\nObjective: {objective}"
+            f"Based on the following objective, please break down the objective into the next sub-task, and create a concise and detailed prompt for a subagent so it can execute that task."
+            f"IF AND ONLY IF THE MAIN OBJECTIVE has been FULLY ACHIEVED, so SEVERAL TASKS HAVE BEEN COMPLETED, include the phrase 'The main task is complete:' at the beginning of your response.\nObjective: {objective}"
         )
         is_first_call = False
     else:
         prompt = (
-            "Please Identify the next logical sub-task needed, considering sub-tasks list defined earlier, even answering clarifiation questions, to progress towards completing the objective, and create a concise and detailed prompt for a sub-agent to execute that task."
+            "Please Identify the next logical sub-task needed, even answering clarifiation questions, to progress towards completing the objective, and create a concise and detailed prompt for a sub-agent to execute that task."
             f"\n Previous sub-task result: {objective}")
 
     # Use the 'o1-mini' model tab
@@ -188,56 +212,6 @@ def gpt_orchestrator(objective):
             )
         )
         console.print()
-    except TimeoutError as e:
-        console.print(
-            Panel(
-                str(e),
-                title="[bold red]Error[/bold red]",
-                title_align="left",
-                border_style="red",
-            )
-        )
-        response_text = ""
-
-    return response_text
-
-def user_edit_gpt_tasks(gpt_result):
-    # Print the GPT-generated result
-    console.print(f"\n[bold]GPT Generated Result:[/bold]\n{gpt_result}")
-
-    # Prompt the user to edit the result
-    console.print("[bold green]Please edit the result if necessary. When done, submit an empty line.[/bold green]")
-    user_input_lines = []
-    while True:
-        line = input()
-        if line == '':
-            break
-        user_input_lines.append(line)
-    user_input = '\n'.join(user_input_lines)
-
-    # If the user doesn't provide any input, use the original GPT result
-    if not user_input.strip():
-        user_input = gpt_result
-
-    # Send the user's input to the 'o1-mini' GPT model
-    tab = tabs["o1-mini"]
-    wait_for_selector(tab)
-    prompt = (
-        f"There is the list of tasks that approved by user: {user_input}.\n Please use it as a reference for all generating sub-tasks."
-    )
-    insert_prompt(tab, prompt)
-
-    # Retrieve the response
-    try:
-        response_text = get_response(tab)
-        console.print(
-            Panel(
-                "Result sent to GPT model and response received.",
-                title=f"[bold green]User Edited Result Sent to GPT[/bold green]",
-                title_align="left",
-                border_style="green",
-            )
-        )
     except TimeoutError as e:
         console.print(
             Panel(
@@ -368,14 +342,9 @@ def main():
         file.write(objective + '\n')  # Write initial objective
         while True:
             # Call the orchestrator with the objective
-            if is_first_call:
-                gpt_tasks = gpt_orchestrator(objective)
-                gpt_tasks = user_edit_gpt_tasks(gpt_tasks)
-                gpt_result = gpt_orchestrator(gpt_tasks)
-            else:
-                gpt_result = gpt_orchestrator(objective)
-            if "The task is complete:" in gpt_result:
-                objective = gpt_result.replace("The task is complete:", "").strip()
+            gpt_result = gpt_orchestrator(objective)
+            if "The main task is complete:" in gpt_result:
+                objective = gpt_result.replace("The main task is complete:", "").strip()
                 file.write(objective + '\n')  # Write final result
                 break
             else:
