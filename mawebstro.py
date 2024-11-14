@@ -12,6 +12,7 @@ import tempfile
 # Global variables to store tabs
 browser = None
 tabs = {}
+is_first_call = True
 
 def is_chrome_running_in_debug_mode():
     # Check if Chrome is running in debug mode
@@ -98,45 +99,77 @@ def wait_for_selector(tab):
             expression=f"document.querySelector('#prompt-textarea') !== null"
         )["result"].get("value", False)
 
-def gpt_interact(tab, prompt, update_interval=4, timeout=120):
-    # Wait for the prompt textarea to be available
-    wait_for_selector(tab)
+import time
 
-    # Insert the prompt and submit
-    browser.activate_tab(tab)
-    tab.Runtime.evaluate(
-        expression="document.querySelector('#prompt-textarea').focus()"
-    )
-    tab.call_method("Input.insertText", text=prompt)
-    tab.call_method("Input.dispatchKeyEvent", type="keyDown", key="Enter", code="Enter", text="\r")
-    tab.call_method("Input.dispatchKeyEvent", type="keyUp", key="Enter", code="Enter", text="\r")
+def gpt_interact(tab, prompt, update_interval=2, timeout=120):
+    def wait_for_selector(tab, selector, timeout=30):
+        start = time.time()
+        while time.time() - start < timeout:
+            result = tab.Runtime.evaluate(expression=f"document.querySelector('{selector}') !== null;")
+            if result.get("result", {}).get("value"):
+                return True
+            time.sleep(0.5)
+        raise TimeoutError(f"Selector {selector} not found within {timeout} seconds.")
 
-    # Retrieve the response
-    previous_text = ""
-    start_time = time.time()
-    while True:
-        # JavaScript to check if the assistant has responded
-        check_response_js = """
-        (() => {
-            const messages = document.querySelectorAll('div[class*="markdown"]');
-            const lastMessage = messages[messages.length - 1];
-            if (lastMessage) {
-                return lastMessage.textContent.trim();
-            }
-            return null;
-        })();
+    try:
+        # Wait for the prompt textarea to be available
+        wait_for_selector(tab, '#prompt-textarea')
+
+        # Activate the tab and focus the textarea
+        browser.activate_tab(tab)
+        tab.Runtime.evaluate(expression="document.querySelector('#prompt-textarea').focus();")
+
+        # Clear any existing text in the textarea
+        clear_text_js = "document.querySelector('#prompt-textarea').value = '';"
+        tab.Runtime.evaluate(expression=clear_text_js)
+
+        # Set the prompt text directly
+        set_text_js = f"document.querySelector('#prompt-textarea').value = `{prompt}`;"
+        tab.Runtime.evaluate(expression=set_text_js)
+
+        # Dispatch input and change events to ensure the application registers the new text
+        dispatch_events_js = """
+            const textarea = document.querySelector('#prompt-textarea');
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            textarea.dispatchEvent(new Event('change', { bubbles: true }));
         """
-        result = tab.Runtime.evaluate(expression=check_response_js)
-        response_text = result.get("result", {}).get("value", None)
-        if response_text:
-            if previous_text == response_text:
-                return response_text
-            previous_text = response_text
-        elapsed_time = time.time() - start_time
-        if elapsed_time > timeout:
-          raise TimeoutError("Waiting for response timed out.")
-        else:
-            time.sleep(update_interval)  # Check every n seconds
+        tab.Runtime.evaluate(expression=dispatch_events_js)
+
+        # Submit the prompt by simulating the Enter key
+        tab.call_method("Input.dispatchKeyEvent", type="keyDown", key="Enter", code="Enter", text="\r")
+        tab.call_method("Input.dispatchKeyEvent", type="keyUp", key="Enter", code="Enter", text="\r")
+
+        # Retrieve the response
+        previous_text = ""
+        start_time = time.time()
+        while True:
+            # JavaScript to check if the assistant has responded
+            check_response_js = """
+            (() => {
+                const messages = document.querySelectorAll('div[class*="markdown"]');
+                const lastMessage = messages[messages.length - 1];
+                if (lastMessage) {
+                    return lastMessage.textContent.trim();
+                }
+                return null;
+            })();
+            """
+            result = tab.Runtime.evaluate(expression=check_response_js)
+            response_text = result.get("result", {}).get("value", None)
+            if response_text:
+                if previous_text == response_text:
+                    return response_text
+                previous_text = response_text
+            elapsed_time = time.time() - start_time
+            if elapsed_time > timeout:
+                raise TimeoutError("Waiting for response timed out.")
+            else:
+                time.sleep(update_interval)  # Check every n seconds
+
+    except Exception as e:
+        # Handle or log exceptions as needed
+        raise e
+
 
 def gpt_orchestrator(objective):
     global is_first_call
@@ -144,7 +177,7 @@ def gpt_orchestrator(objective):
     # Construct the prompt
     if is_first_call:
         prompt = (
-            f"Objective: {objective}\n\n"
+            f"Context and main goal: {objective}\n\n"
             f"Break down the objective into a list of small but important and meaningful sub-tasks to achieve the goal."
         )
         is_first_call = False
@@ -171,8 +204,7 @@ def gpt_orchestrator(objective):
 def user_edit_gpt_tasks(gpt_result):
     # Prompt the user to edit the result
     user_input_lines = []
-    print("GPT Generated Result:")
-    print(gpt_result)
+    print("User adjustments of GPT Generated Results:")
     print("Edit the result if necessary. Submit an empty line to finish editing.")
     try:
         while True:
@@ -194,7 +226,7 @@ def user_edit_gpt_tasks(gpt_result):
     if tab is None:
         return ""
     prompt = (
-        f"Approved tasks:\n{user_input}\n"
+        f"Approved by users tasks:\n{user_input}\n. THEY SHOULD BE CONSIDERED IN HIGH-PRIORITY LEVEL. IF USER SAID THAT TASK SHOULD BE SKIPPED THEN MAKE SURE IT'S SKIPPED"
         "Use these tasks as a reference for generating further sub-tasks."
     )
 

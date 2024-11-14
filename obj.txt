@@ -1,48 +1,90 @@
-Objective: Generate a web-based intelligent assistant designed to help users with coding projects and learning new topics using ai-orchestrating method
-Sub-tasks to consider:
-1. Implement Objective Classification:
-Develop a classification mechanism that automatically determines whether the user's input objective is for project code generation or learning purposes.
-Utilize keyword analysis or natural language processing techniques to accurately categorize the objective.
-2. Generate Clarifying Questions (Clarification Stage):
-Based on the classified objective type, GPT AI MODEL must GENERATE at least four comprehensive and appropriate clarifying questions to better understand the user's specific needs and goals.
-Ensure the questions are tailored to the objective type:
-For project code generation:
-Ask about specific to the current objective questions, desired features, clarify potential ambiguities, etc.
-For learning objectives:
-Inquire about specific to the current objective questions, the current knowledge level, specific topics of interest, preferred learning style, potential hard themes, etc.
-3. Enhance User Control:
-Present the generated clarifying questions to the user before proceeding with the orchestration stage.
-Collect the user's responses to these questions to refine the system's understanding of the objective.
-4. Adapt Orchestrator and Prompts:
-Utilize the clarified information to create more specific and effective prompts for the GPT orchestrator.
-Ensure that the orchestrator uses the user's responses to generate tailored sub-tasks and deliver more relevant results.
-Develop separate prompt templates or strategies for each objective type to enhance the quality of interactions.
-5. Improve Overall User Experience:
-Design the system to be intuitive and easy to use, even for users with little to no programming experience.
-Provide clear instructions and feedback at each stage of the interaction.
-Incorporate error handling to manage unexpected inputs or situations gracefully.
+Project Overview
+This project aims to develop a robust Python-based command-line application that leverages GPT for both code generation and learning facilitation. The application is designed to operate locally on the client side without relying on external frameworks or backend services. It targets users who wish to delve deeply into specific fields, offering comprehensive code generation capabilities and personalized learning experiences.
+
+Core Components
+1. Objective Classification
+Purpose:
+Determine whether the user's objective pertains to code generation or learning.
+
+Implementation Details:
+
+Classification Mechanism: Utilize the existing gpt_interact function to classify objectives. If a simple word dictionary proves insufficient, leverage GPT's capabilities for more nuanced classification.
+Categories:
+Code Generation
+Learning
+2. Dynamic Clarifying Questions
+Purpose:
+Generate tailored clarifying questions based on the classified objective to better understand the user's specific needs and goals.
+
+Implementation Details:
+
+Clarifying Questions Generator: Develop a module that leverages gpt_interact to produce at least four comprehensive and appropriate questions tailored to the objective type.
+Question Types:
+For Code Generation:
+Specifics about the current objective.
+Desired features.
+Clarification of potential ambiguities.
+Additional functional requirements.
+For Learning Objectives:
+Current knowledge level.
+Specific topics of interest.
+Preferred learning style.
+Identification of challenging themes.
+3. Orchestrator and Prompt Management
+Purpose:
+Manage the interaction flow, adapt prompts based on user responses, and handle sub-task generation to ensure seamless and relevant AI interactions.
+
+Implementation Details:
+
+Orchestrator Logic:
+Manage AI interactions based solely on initial user inputs.
+Allow GPT to handle task clarification and progression without requiring constant user supervision.
+Prompt Templates:
+Separate Templates: Design distinct prompt templates for each objective type (code generation and learning) to enhance interaction quality.
+Adaptation Mechanism: Implement logic to modify prompts based on user responses and system understanding.
+Sub-task Generation:
+Break down user objectives into actionable sub-tasks.
+Ensure that the current level of user interaction remains concise and sufficient.
+4. Error Handling and Timeouts
+Purpose:
+Ensure smooth execution by managing errors and handling potential delays or unresponsive AI models gracefully.
+
+Implementation Details:
+
+Robust Error Management: Implement comprehensive error handling mechanisms for interactions and AI responses.
+Timeout Mechanisms: Ensure the system can gracefully handle delays or unresponsive scenarios without crashing or freezing.
+Graceful Degradation: Omit or forget unrelated tasks if errors occur, maintaining the focus on the primary objective.
+5. User Experience Enhancements
+Purpose:
+Provide an intuitive and user-friendly experience, ensuring ease of use even for individuals with minimal programming knowledge.
+
+Implementation Details:
+
+Clear Instructions: Offer straightforward guidance at each interaction stage.
+Feedback Mechanisms: Provide real-time feedback to inform users of the system's status and actions.
+Intuitive Interactions: Design the command-line interface to be straightforward and easy to navigate.
+Additional Enhancements:
+Prompt Customization: Allow users to customize prompt preferences to better suit their individual needs.
+Session Management: Enable users to save and resume sessions, facilitating continuous workflows.
+Progress Indicators: Display progress bars or indicators during long-running tasks to keep users informed.
+Help and Documentation: Incorporate accessible help commands and comprehensive documentation within the application.
+Accessibility Features: Ensure the application is accessible to users with disabilities by supporting keyboard navigation and screen readers.
 The project code:
 import pychrome
 import os
 import sys
-import re
 import time
 import json
 import subprocess
 import argparse
-from rich.console import Console
-from rich.panel import Panel
 from datetime import datetime
-import json
 import shutil
 import tempfile
-
-# Initialize the Rich Console for enhanced terminal output
-console = Console()
 
 # Global variables to store tabs
 browser = None
 tabs = {}
+is_first_call = True
 
 def is_chrome_running_in_debug_mode():
     # Check if Chrome is running in debug mode
@@ -68,8 +110,7 @@ def start_chrome_in_debug_mode():
     chrome_path = next((path for path in chrome_paths if os.path.exists(path)), None)
 
     if not chrome_path:
-        console.print("[bold red]Google Chrome executable not found.[/bold red]")
-        sys.exit(1)
+        sys.exit("Google Chrome executable not found.")
 
     try:
         subprocess.Popen([
@@ -81,11 +122,9 @@ def start_chrome_in_debug_mode():
             "--disable-popup-blocking",
             "--disable-extensions",
         ])
-        console.print("[bold green]Started Chrome in debug mode.[/bold green]")
         time.sleep(2)  # Wait for Chrome to start
     except Exception as e:
-        console.print(f"[bold red]Failed to start Chrome in debug mode: {e}[/bold red]")
-        sys.exit(1)
+        sys.exit(f"Failed to start Chrome in debug mode: {e}")
 
 def initialize_browser():
     global browser, tabs
@@ -100,7 +139,7 @@ def initialize_browser():
     urls = {
         "o1-preview": "https://chat.openai.com/?model=o1-preview",
         "o1-mini": "https://chat.openai.com/?model=o1-mini",
-        "gpt-4o": "https://chat.openai.com/?model=gpt-4o",
+        "GPTo": "https://chat.openai.com/?model=GPTo",
     }
     # Open tabs for each model
     for model_name, url in urls.items():
@@ -118,35 +157,34 @@ def initialize_browser():
     # Check if login is required
     current_url = tabs["o1-preview"].Runtime.evaluate(
         expression="window.location.href"
-    )["result"]["value"]
+    )["result"].get("value", "")
     if "login" in current_url or "auth0" in current_url:
-        console.print("[bold yellow]Please log in to ChatGPT in the opened browser tabs.[/bold yellow]")
-        input("After logging in, press Enter here to continue...")
+        input("Please log in to ChatGPT in the opened browser tabs. After logging in, press Enter here to continue...")
 
 def wait_for_selector(tab):
     result = tab.Runtime.evaluate(
         expression=f"document.querySelector('#prompt-textarea') !== null"
-    )["result"]["value"]
+    )["result"].get("value", False)
     while not result:
         time.sleep(0.5)
         result = tab.Runtime.evaluate(
             expression=f"document.querySelector('#prompt-textarea') !== null"
-        )["result"]["value"]
+        )["result"].get("value", False)
 
-def insert_prompt(tab, prompt):
+def gpt_interact(tab, prompt, update_interval=4, timeout=120):
+    # Wait for the prompt textarea to be available
+    wait_for_selector(tab)
+
+    # Insert the prompt and submit
     browser.activate_tab(tab)
-    # Focus on the textarea
     tab.Runtime.evaluate(
         expression="document.querySelector('#prompt-textarea').focus()"
     )
-    # Insert the prompt
     tab.call_method("Input.insertText", text=prompt)
-
-    # Press Enter to submit the prompt
     tab.call_method("Input.dispatchKeyEvent", type="keyDown", key="Enter", code="Enter", text="\r")
     tab.call_method("Input.dispatchKeyEvent", type="keyUp", key="Enter", code="Enter", text="\r")
 
-def get_response(tab, timeout=120):
+    # Retrieve the response
     previous_text = ""
     start_time = time.time()
     while True:
@@ -167,142 +205,115 @@ def get_response(tab, timeout=120):
             if previous_text == response_text:
                 return response_text
             previous_text = response_text
-            time.sleep(4)
-        elif time.time() - start_time > timeout:
-            raise TimeoutError("Waiting for response timed out.")
+        elapsed_time = time.time() - start_time
+        if elapsed_time > timeout:
+          raise TimeoutError("Waiting for response timed out.")
         else:
-            time.sleep(5)  # Check every 5 seconds
+            time.sleep(update_interval)  # Check every n seconds
 
-is_first_call = True
 def gpt_orchestrator(objective):
     global is_first_call
-    console.print(f"\n[bold]Calling Orchestrator for your objective[/bold]")
 
     # Construct the prompt
     if is_first_call:
         prompt = (
-            f"Based on the following objective, please break down the objective into the next sub-task, and create a concise and detailed prompt for a subagent so it can execute that task."
-            f"IF AND ONLY IF THE MAIN OBJECTIVE has been FULLY ACHIEVED, so SEVERAL TASKS HAVE BEEN COMPLETED, include the phrase 'The main task is complete:' at the beginning of your response.\nObjective: {objective}"
+            f"Objective: {objective}\n\n"
+            f"Break down the objective into a list of small but important and meaningful sub-tasks to achieve the goal."
         )
         is_first_call = False
     else:
         prompt = (
-            "Please Identify the next logical sub-task needed, even answering clarifiation questions, to progress towards completing the objective, and create a concise and detailed prompt for a sub-agent to execute that task."
-            f"\n Previous sub-task result: {objective}")
+            f"Objective: {objective}\n"
+            "Identify the next small but important sub-task that needs to be done. Include short dictionary-like summary of context, previous completed sub-task, and if required add clarifications, and generate a concise, well-detailed prompt for a sub-agent to execute the task."
+            "IF AND ONLY IF ALL SUB-TASKS ARE FINISHED, include 'The main task is complete:' at the beginning."
+        )
 
     # Use the 'o1-mini' model tab
-    tab = tabs["o1-mini"]
+    tab = tabs.get("o1-mini")
+    if tab is None:
+        return ""
 
-    # Wait for the prompt textarea to be available
-    wait_for_selector(tab)
-
-    # Insert the prompt and submit
-    insert_prompt(tab, prompt)
-
-    # Retrieve the response
+    # Interact with GPT
     try:
-        response_text = get_response(tab)
-        console.print(
-            Panel(
-                "Orchestrator process completed successfully!",
-                title=f"[bold green]GPT Orchestrator[/bold green]",
-                title_align="left",
-                border_style="green",
-                subtitle="Sending task to GPT 👇",
-            )
-        )
-        console.print()
+        response_text = gpt_interact(tab, prompt)
     except TimeoutError as e:
-        console.print(
-            Panel(
-                str(e),
-                title="[bold red]Error[/bold red]",
-                title_align="left",
-                border_style="red",
-            )
-        )
+        response_text = ""
+
+    return response_text
+
+def user_edit_gpt_tasks(gpt_result):
+    # Prompt the user to edit the result
+    user_input_lines = []
+    print("GPT Generated Result:")
+    print(gpt_result)
+    print("Edit the result if necessary. Submit an empty line to finish editing.")
+    try:
+        while True:
+            line = input()
+            if line == '':
+                break
+            user_input_lines.append(line)
+    except KeyboardInterrupt:
+        user_input = gpt_result
+    else:
+        user_input = '\n'.join(user_input_lines)
+
+    # If the user doesn't provide any input, use the original GPT result
+    if not user_input.strip():
+        user_input = gpt_result
+
+    # Send the user's input to the 'o1-mini' GPT model
+    tab = tabs.get("o1-mini")
+    if tab is None:
+        return ""
+    prompt = (
+        f"Approved tasks:\n{user_input}\n"
+        "Use these tasks as a reference for generating further sub-tasks."
+    )
+
+    # Interact with GPT
+    try:
+        response_text = gpt_interact(tab, prompt)
+    except TimeoutError as e:
         response_text = ""
 
     return response_text
 
 def gpt_sub_agent(sub_task_prompt):
-    # Use the 'gpt-4o' model tab
-    tab = tabs["gpt-4o"]
-
-    # Wait for the prompt textarea to be available
-    wait_for_selector(tab)
-
-    # Insert the prompt and submit
-    insert_prompt(tab, sub_task_prompt)
-
-    # Retrieve the response
+    # Use the 'GPTo' model tab
+    tab = tabs.get("GPTo")
+    if tab is None:
+        return ""
+    sub_task_prompt += (
+        "\nPlease execute the sub-task as specified. Ensure all requirements are met and provide detailed results. "
+        "If there are any missing elements or if the task cannot be completed without additional context, provide suggestions or next steps."
+    )
+    # Interact with GPT
     try:
-        response_text = get_response(tab)
-        console.print(
-            Panel(
-                "Sub-agent process completed successfully!",
-                title="[bold blue]GPT Sub-agent Result[/bold blue]",
-                title_align="left",
-                border_style="blue",
-                subtitle="Task completed, sending result to GPT 👇",
-            )
-        )
-        console.print()
+        response_text = gpt_interact(tab, sub_task_prompt)
     except TimeoutError as e:
-        console.print(
-            Panel(
-                str(e),
-                title="[bold red]Error[/bold red]",
-                title_align="left",
-                border_style="red",
-            )
-        )
         response_text = ""
 
     return response_text
 
 def gpt_refine(objective):
-    console.print(
-        "\nCalling GPT to provide the refined final output for your objective:"
-    )
-
     # Construct the prompt
     prompt = (
-        f"Objective: {objective}\n\nPlease review and refine the sub-task results into a cohesive final output. Add any missing information or details as needed. When working on code projects, ONLY AND ONLY IF THE PROJECT IS CLEARLY A CODING ONE please provide the following:\n1. Project Name: Create a concise and appropriate project name that fits the project based on what it's creating. The project name should be no more than 20 characters long.\n2. Folder Structure: Provide the folder structure as a valid JSON object, where each key represents a folder or file, and nested keys represent subfolders. Use null values for files. Ensure the JSON is properly formatted without any syntax errors. Please make sure all keys are enclosed in double quotes, and ensure objects are correctly encapsulated with braces, separating items with commas as necessary.\nWrap the JSON object in <folder_structure> tags.\n3. Code Files: For each code file, include ONLY the file name NEVER EVER USE THE FILE PATH OR ANY OTHER FORMATTING YOU ONLY USE THE FOLLOWING format 'Filename: <filename>' followed by the code block enclosed in triple backticks, with the language identifier after the opening backticks, like this:\n\npython\n<code>\n"
-        f"If applicable, provide code files and folder structures as per best practices."
+        f"Objective: {objective}\n\n"
+        "Refine the sub-task results into a cohesive final output. Add any missing information."
+        "For coding projects, provide the following if applicable:\n"
+        "1. Project Name: A concise name (max 20 characters).\n"
+        "2. Folder Structure: Provide as a JSON object wrapped in <folder_structure> tags.\n"
+        "3. Code Files: For each code file, include the filename and code enclosed in triple backticks."
     )
 
     # Use the 'o1-preview' model tab
-    tab = tabs["o1-preview"]
+    tab = tabs.get("o1-mini")
 
-    # Wait for the prompt textarea to be available
-    wait_for_selector(tab)
-
-    # Insert the prompt and submit
-    insert_prompt(tab, prompt)
-
-    # Retrieve the response
+    # Interact with GPT
     try:
-        response_text = get_response(tab)
-        console.print(
-            Panel(
-                response_text,
-                title="[bold green]GPT Refine Result[/bold green]",
-                title_align="left",
-                border_style="green",
-                subtitle="Refinement complete 👇",
-            )
-        )
-        console.print()
+        response_text = gpt_interact(tab, prompt, 15)
     except TimeoutError as e:
-        console.print(
-            Panel(
-                str(e),
-                title="[bold red]Error[/bold red]",
-                title_align="left",
-                border_style="red",
-            )
-        )
         response_text = ""
 
     return response_text
@@ -313,7 +324,7 @@ def main():
     args = parser.parse_args()
 
     if not args.objective:
-        user_input = console.input("[bold green]Your objective or the path to a file containing it: [/bold green]")
+        user_input = input("Your objective or the path to a file containing it: ")
     else:
         user_input = args.objective
 
@@ -323,8 +334,7 @@ def main():
             with open(user_input, 'r') as file:
                 objective = file.read().strip()
         except Exception as e:
-            console.print(f"[bold red]An error occurred while reading the file: {e}[/bold red]")
-            sys.exit(1)
+            sys.exit(f"An error occurred while reading the file: {e}")
     else:
         objective = user_input
 
@@ -342,10 +352,15 @@ def main():
         file.write(objective + '\n')  # Write initial objective
         while True:
             # Call the orchestrator with the objective
-            gpt_result = gpt_orchestrator(objective)
+            if is_first_call:
+                gpt_tasks = gpt_orchestrator(objective)
+                gpt_tasks = user_edit_gpt_tasks(gpt_tasks)
+                file.write(gpt_tasks + '\n')  # Write final result
+                gpt_result = gpt_orchestrator(gpt_tasks)
+            else:
+                gpt_result = gpt_orchestrator(objective)
             if "The main task is complete:" in gpt_result:
                 objective = gpt_result.replace("The main task is complete:", "").strip()
-                file.write(objective + '\n')  # Write final result
                 break
             else:
                 # Execute the sub-task using the GPT sub-agent
@@ -365,7 +380,6 @@ def main():
     output_filename = f"output_{timestamp}.md"
     with open(output_filename, "w", encoding='utf-8') as file:
         file.write(refined_output)
-    console.print(f"[bold green]Refined output written to {output_filename}[/bold green]")
 
 if __name__ == "__main__":
     main()
