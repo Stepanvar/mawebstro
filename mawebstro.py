@@ -120,12 +120,16 @@ def gpt_interact(tab, prompt, update_interval=2, timeout=120):
         tab.Runtime.evaluate(expression="document.querySelector('#prompt-textarea').focus();")
 
         # Clear any existing text in the textarea
-        clear_text_js = "document.querySelector('#prompt-textarea').value = '';"
+        clear_text_js = """
+        var element = document.querySelector('#prompt-textarea');
+        element.value = '';
+        var event = new Event('input', { bubbles: true });
+        element.dispatchEvent(event);
+        """
         tab.Runtime.evaluate(expression=clear_text_js)
 
         # Set the prompt text directly
-        set_text_js = f"document.querySelector('#prompt-textarea').value = `{prompt}`;"
-        tab.Runtime.evaluate(expression=set_text_js)
+        tab.call_method("Input.insertText", text=prompt)
 
         # Dispatch input and change events to ensure the application registers the new text
         dispatch_events_js = """
@@ -139,11 +143,38 @@ def gpt_interact(tab, prompt, update_interval=2, timeout=120):
         tab.call_method("Input.dispatchKeyEvent", type="keyDown", key="Enter", code="Enter", text="\r")
         tab.call_method("Input.dispatchKeyEvent", type="keyUp", key="Enter", code="Enter", text="\r")
 
-        # Retrieve the response
+        # Store the initial message count
+        message_count_js = """
+        (() => {
+            const messages = document.querySelectorAll('div[class*="markdown"]');
+            return messages.length;
+        })();
+        """
+        result = tab.Runtime.evaluate(expression=message_count_js)
+        message_count_before = result.get("result", {}).get("value", 0)
+
+        # Initialize start time
+        start_time = time.time()
+
+        # Wait until the message count increases
+        while True:
+            result = tab.Runtime.evaluate(expression=message_count_js)
+            message_count_current = result.get("result", {}).get("value", 0)
+
+            if message_count_current > message_count_before:
+                break  # New message has appeared
+
+            elapsed_time = time.time() - start_time
+            if elapsed_time > timeout:
+                raise TimeoutError("Waiting for new message timed out.")
+            else:
+                time.sleep(update_interval)  # Wait before checking again
+
+        # Now retrieve the response text
         previous_text = ""
         start_time = time.time()
         while True:
-            # JavaScript to check if the assistant has responded
+            # JavaScript to retrieve the last message text
             check_response_js = """
             (() => {
                 const messages = document.querySelectorAll('div[class*="markdown"]');
@@ -156,20 +187,21 @@ def gpt_interact(tab, prompt, update_interval=2, timeout=120):
             """
             result = tab.Runtime.evaluate(expression=check_response_js)
             response_text = result.get("result", {}).get("value", None)
+
             if response_text:
                 if previous_text == response_text:
+                    # No change in response text; assume response is complete
                     return response_text
                 previous_text = response_text
             elapsed_time = time.time() - start_time
             if elapsed_time > timeout:
                 raise TimeoutError("Waiting for response timed out.")
             else:
-                time.sleep(update_interval)  # Check every n seconds
+                time.sleep(4)  # Check every 4 seconds
 
     except Exception as e:
         # Handle or log exceptions as needed
         raise e
-
 
 def gpt_orchestrator(objective):
     global is_first_call
@@ -177,14 +209,35 @@ def gpt_orchestrator(objective):
     # Construct the prompt
     if is_first_call:
         prompt = (
-            f"Context and main goal: {objective}\n\n"
-            f"Break down the objective into a list of small but important and meaningful sub-tasks to achieve the goal."
+            f"Context and Main Goal:\n{objective}\n\n"
+            "Please perform the following:\n"
+            "1. Break down the above objective into a **comprehensive list of small, important, and meaningful sub-tasks** required to achieve the goal.\n"
+            "2. Ensure that each sub-task is **clear, actionable, and focuses on a single aspect** of the overall objective.\n"
+            "3. Organize the sub-tasks in a logical sequence that makes sense for execution.\n"
+            "4. **Do not** omit any necessary steps, but also **avoid unnecessary details**.\n\n"
+            "Output Format:\n"
+            "- Provide the list in a numbered format.\n"
+            "- Each sub-task should be concise, ideally one or two sentences.\n\n"
+            "Important Guidelines:\n"
+            "- **Do not** include any additional explanations or introductions.\n"
+            "- The list is intended for the user to review and edit, so clarity is paramount.\n"
+            "- If any assumptions are made, **highlight them** so the user can adjust as needed.\n\n"
+            "Please generate **only** the list of sub-tasks as specified."
         )
         is_first_call = False
     else:
         prompt = (
-            f"Objective: {objective}\n"
-            "Identify the next small but important sub-task that needs to be done. Include short dictionary-like summary of context, previous completed sub-task, and if required add clarifications, and generate a concise, well-detailed prompt for a sub-agent to execute the task."
+            f"Instruction Block: {objective}\n"
+            "You are an orchestrator for sub-agents. Please generate the prompt for a sub-agent to execute the next sub-task. Generate next sub-task description also.\n"
+            "The prompt should include the following sections **only**:\n"
+            "1. **Prompt Header**: Summary context in format keyword(context type) - value. For example, programming language - python, stack - django+bootstrap, explanation level - professional, etc.\n"
+            "2. **List of Completed Main Tasks (if any)**: Provide a list of main tasks that havealready been completed.\n"
+            "3. **Main Part of the Prompt for Sub-Agent**: Present the main instructions or task for the sub-agent to execute.\n"
+            "4. **Task-related Context**: Provide any relevant context or information that is specific to the task or will help the sub-agent perform the task.\n"
+            "Important Guidelines:\n"
+            "- Do **not** include any additional text outside of these sections.\n"
+            "- Do **not** list all sub-tasks or duplicate tasks.\n"
+            "Please provide only the prompt for the sub-agent, formatted exactly as specified."
             "IF AND ONLY IF ALL SUB-TASKS ARE FINISHED, include 'The task is complete:' at the beginning."
         )
 
@@ -195,7 +248,7 @@ def gpt_orchestrator(objective):
 
     # Interact with GPT
     try:
-        response_text = gpt_interact(tab, prompt)
+        response_text = gpt_interact(tab, prompt, 8)
     except TimeoutError as e:
         response_text = ""
 
@@ -226,13 +279,25 @@ def user_edit_gpt_tasks(gpt_result):
     if tab is None:
         return ""
     prompt = (
-        f"Approved by users tasks:\n{user_input}\n. THEY SHOULD BE CONSIDERED IN HIGH-PRIORITY LEVEL. IF USER SAID THAT TASK SHOULD BE SKIPPED THEN MAKE SURE IT'S SKIPPED"
-        "Use these tasks as a reference for generating further sub-tasks."
+        f"User-Approved Tasks and Information:\n{user_input}\n\n"
+        "Please perform the following steps:\n"
+        "1. **Consider the user's input as high-priority** and make sure to incorporate their edits or instructions accurately.\n"
+        "   - If the user has indicated that a task should be skipped, ensure it is **excluded** from the revised list.\n"
+        "2. Use the provided tasks as a reference to generate any further necessary sub-tasks that align with the overall objective.\n"
+        "3. Write a **revised version of the task list** in the proper format, ensuring clarity and logical sequence.\n\n"
+        "Output Format:\n"
+        "- Present the revised task list in a numbered format with short description of each task.\n"
+        "- Each task should be concise, clear, and actionable.\n\n"
+        "Important Guidelines:\n"
+        "- **Do not** include any additional explanations or introductions.\n"
+        "- **Do not** reinstate any tasks the user has asked to skip.\n"
+        "- Ensure that the revised task list reflects the user's priorities and instructions.\n\n"
+        "Please generate **only** the revised task list as specified."
     )
 
     # Interact with GPT
     try:
-        response_text = gpt_interact(tab, prompt)
+        response_text = gpt_interact(tab, prompt, 8)
     except TimeoutError as e:
         response_text = ""
 
@@ -244,8 +309,15 @@ def gpt_sub_agent(sub_task_prompt):
     if tab is None:
         return ""
     sub_task_prompt += (
-        "\nPlease execute the sub-task as specified. Ensure all requirements are met and provide detailed results. "
-        "If there are any missing elements or if the task cannot be completed without additional context, provide suggestions or next steps."
+            "Your response should include the following sections **only**:\n"
+            "1. **Context for Further Task Completion**: Briefly describe any relevant context or information that will assist in the completion of subsequent tasks.\n"
+            "2. **Result of the Completed Task**: [Provide code or the information that you was told to do].\n"
+            "3. **Considerations and Recommendations**: Offer any insights, suggestions, or additional information that may be valuable for future and current steps.\n\n"
+            "Important Guidelines:\n"
+            "- **Clarity and Precision**: Ensure that each section is clear, precise, directly related to the sub-task, and avoid unnecessary details..\n"
+            "- **Address Missing Elements**: If you encounter any missing elements or require additional context to complete the task, provide suggestions or next steps to obtain the necessary information.\n"
+            "- **Answer Format**: Focus on generating prompts or outputs optimized for GPT processing, rather than for end-user.\n"
+            "Please provide **only** the information as specified above."
     )
     # Interact with GPT
     try:
@@ -267,7 +339,7 @@ def gpt_refine(objective):
     )
 
     # Use the 'o1-preview' model tab
-    tab = tabs.get("o1-mini")
+    tab = tabs.get("o1-preview")
 
     # Interact with GPT
     try:
