@@ -230,10 +230,10 @@ def gpt_orchestrator(objective):
             f"Instruction Block: {objective}\n"
             "You are an orchestrator for sub-agents. Please generate the prompt for a sub-agent to execute the next sub-task. Generate next sub-task description also.\n"
             "The prompt should include the following sections **only**:\n"
-            "1. **Prompt Header**: Summary context in format keyword(context type) - value. For example, programming language - python, stack - django+bootstrap, explanation level - professional, etc.\n"
+            "1. **Prompt Header**: Current project categorization in format: category - value. For example, programming language - python, stack - django+bootstrap, explanation level - professional, etc. At least 5 project categories are required.\n"
             "2. **List of Completed Main Tasks (if any)**: Provide a list of main tasks that havealready been completed.\n"
             "3. **Main Part of the Prompt for Sub-Agent**: Present the main instructions or task for the sub-agent to execute.\n"
-            "4. **Task-related Context**: Provide any relevant context or information that is specific to the task or will help the sub-agent perform the task.\n"
+            "4. **Task-related Context**: Provide any relevant context or information that is specific to the task or will help the sub-agent perform the task. For example code that it should enhance or information that it should understand.\n"
             "Important Guidelines:\n"
             "- Do **not** include any additional text outside of these sections.\n"
             "- Do **not** list all sub-tasks or duplicate tasks.\n"
@@ -311,7 +311,7 @@ def gpt_sub_agent(sub_task_prompt):
     sub_task_prompt += (
             "Your response should include the following sections **only**:\n"
             "1. **Context for Further Task Completion**: Briefly describe any relevant context or information that will assist in the completion of subsequent tasks.\n"
-            "2. **Result of the Completed Task**: [Provide code or the information that you was told to do].\n"
+            "2. **Result of the Completed Task**: [Provide code or the information that you was told to generate].\n"
             "3. **Considerations and Recommendations**: Offer any insights, suggestions, or additional information that may be valuable for future and current steps.\n\n"
             "Important Guidelines:\n"
             "- **Clarity and Precision**: Ensure that each section is clear, precise, directly related to the sub-task, and avoid unnecessary details..\n"
@@ -390,7 +390,7 @@ def main():
                 gpt_result = gpt_orchestrator(gpt_tasks)
             else:
                 gpt_result = gpt_orchestrator(objective)
-            if "The task is complete:" in gpt_result:
+            if "The task is complete" in gpt_result:
                 objective = gpt_result.replace("The task is complete:", "").strip()
                 break
             else:
@@ -409,8 +409,11 @@ def main():
     # Write the refined output to a file with a timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_filename = f"output_{timestamp}.md"
+    chunk_size = 1024 * 1024  # 1MB chunks
     with open(output_filename, "w", encoding='utf-8') as file:
-        file.write(refined_output)
+        for i in range(0, len(refined_output), chunk_size):
+            file.write(refined_output[i:i + chunk_size])
+
 
 if __name__ == "__main__":
     main()
