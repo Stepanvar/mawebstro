@@ -210,36 +210,49 @@ def gpt_orchestrator(objective):
     if is_first_call:
         prompt = (
             f"Context and Main Goal:\n{objective}\n\n"
-            "Please perform the following:\n"
-            "1. Break down the above objective into a **comprehensive list of small, important, and meaningful sub-tasks** required to achieve the goal.\n"
-            "2. Ensure that each sub-task is **clear, actionable, and focuses on a single aspect** of the overall objective.\n"
-            "3. Organize the sub-tasks in a logical sequence that makes sense for execution.\n"
-            "4. **Do not** omit any necessary steps, but also **avoid unnecessary details**.\n\n"
+            "Please perform the following steps, focusing on one task at a time:\n"
+            "1. Generate **5 to 10 clarifying questions** to better understand the objective.\n"
+            "   - These questions should aim to uncover unmentioned information that will heavily impact the result and areas that need further clarification.\n"
+            "2. Rewrite the objective in a more **professional and concise** manner.\n"
+            "   - Incorporate any assumptions or general knowledge relevant to the objective.\n"
+            "3. Identify and list key **insights and terms** related to the objective.\n"
+            "   - This should include important concepts, terminology, or considerations necessary for understanding and executing the tasks.\n"
+            "4. Break down the rewritten objective into a **draft list of small, important, and meaningful sub-tasks** required to achieve the goal.\n"
+            "   - Ensure each sub-task is **clear, actionable, and focused on providing key insights of a single aspect** of the overall objective.\n"
+            "   - Organize the sub-tasks in a logical sequence that makes sense for execution.\n"
             "Output Format:\n"
-            "- Provide the list in a numbered format.\n"
-            "- Each sub-task should be concise, ideally one or two sentences.\n\n"
+            "- **Clarifying Questions**:\n"
+            "  List the clarifying questions in a numbered format.\n"
+            "- **Rewritten Objective**:\n"
+            "  Provide the rewritten objective.\n"
+            "- **Key Insights and Terms**:\n"
+            "  List the key insights and terms.\n"
+            "- **Draft List of Sub-Tasks**:\n"
+            "  Provide the list of sub-tasks in a numbered format (5 to 8 tasks).\n"
+            "  Each sub-task should be concise, ideally from one to three sentences.\n\n"
             "Important Guidelines:\n"
+            "- Focus on one step at a time and avoid combining multiple tasks into one.\n"
             "- **Do not** include any additional explanations or introductions.\n"
-            "- The list is intended for the user to review and edit, so clarity is paramount.\n"
+            "- The content is intended for the user to review and edit, so clarity is paramount.\n"
             "- If any assumptions are made, **highlight them** so the user can adjust as needed.\n\n"
-            "Please generate **only** the list of sub-tasks as specified."
+            "Please generate **only** the content as specified."
         )
         is_first_call = False
     else:
         prompt = (
             f"Instruction Block: {objective}\n"
-            "You are an orchestrator for sub-agents. Please generate the prompt for a sub-agent to execute the next sub-task. Generate next sub-task description also.\n"
+            "You are an orchestrator for sub-agents. Please generate the prompt for a sub-agent to execute the **next sub-task**. Consider the current state of the project, context of the project and the previously generated list of sub-tasks. You can adjust the next sub-task description if it will generate result with more new insigths.\n\n"
             "The prompt should include the following sections **only**:\n"
-            "1. **Prompt Header**: Current project categorization in format: category - value. For example, programming language - python, stack - django+bootstrap, explanation level - professional, etc. At least 5 project categories are required.\n"
-            "2. **List of Completed Main Tasks (if any)**: Provide a list of main tasks that havealready been completed.\n"
-            "3. **Main Part of the Prompt for Sub-Agent**: Present the main instructions or task for the sub-agent to execute.\n"
-            "4. **Task-related Context**: Provide any relevant context or information that is specific to the task or will help the sub-agent perform the task. For example code that it should enhance or information that it should understand.\n"
+            "1. **Main Task Description**: Present the main instruction or task for the sub-agent to execute. Focus on one sub-task only.\n"
+            "2. **Completed Tasks (if any)**: List the main tasks that have already been completed in the short form.\n"
+            "3. **Task-related Context**: Provide any relevant context or information specific to this task to help the sub-agent perform it effectively, for example part of created content for enhancing.\n\n"
             "Important Guidelines:\n"
             "- Do **not** include any additional text outside of these sections.\n"
-            "- Do **not** list all sub-tasks or duplicate tasks.\n"
+            "- Do **not** list all remaining sub-tasks or duplicate tasks.\n\n"
+            "Completion Instructions:\n"
+            "- **If all sub-tasks (maximum of 8) are completed**, include 'The task is complete.' at the beginning and do **not** provide further tasks or prompts.\n\n"
             "Please provide only the prompt for the sub-agent, formatted exactly as specified."
-            "IF AND ONLY IF ALL SUB-TASKS ARE FINISHED, include 'The task is complete:' at the beginning."
-        )
+    )
 
     # Use the 'o1-mini' model tab
     tab = tabs.get("o1-mini")
@@ -317,6 +330,7 @@ def gpt_sub_agent(sub_task_prompt):
             "- **Clarity and Precision**: Ensure that each section is clear, precise, directly related to the sub-task, and avoid unnecessary details..\n"
             "- **Address Missing Elements**: If you encounter any missing elements or require additional context to complete the task, provide suggestions or next steps to obtain the necessary information.\n"
             "- **Answer Format**: Focus on generating prompts or outputs optimized for GPT processing, rather than for end-user.\n"
+            "- **Avoid repeating infromation: **Do not repeat** information from the prompt or previous responses.\n"
             "Please provide **only** the information as specified above."
     )
     # Interact with GPT
@@ -331,11 +345,13 @@ def gpt_refine(objective):
     # Construct the prompt
     prompt = (
         f"Objective: {objective}\n\n"
-        "Refine the sub-task results into a cohesive final output. Add any missing information."
-        "For coding projects, provide the following if applicable:\n"
-        "1. Project Name: A concise name (max 20 characters).\n"
-        "2. Folder Structure: Provide as a JSON object wrapped in <folder_structure> tags.\n"
-        "3. Code Files: For each code file, include the filename and code enclosed in triple backticks."
+        "Please refine the sub-task results into a cohesive final output, adding any missing information. Focus on providing the most appropriate result considering the objective.\n\n"
+        "Important Guidelines:\n"
+        "- Ensure the final output is clear, concise, and logically structured.\n"
+        "- Focus solely on content relevant to achieving the objective.\n"
+        "- Do **not** include any additional explanations or introductions.\n"
+        "- If any assumptions are made, **highlight them** so the user can adjust as needed.\n\n"
+        "Please generate **only** the refined final output as specified."
     )
 
     # Use the 'o1-preview' model tab
@@ -386,6 +402,7 @@ def main():
             if is_first_call:
                 gpt_tasks = gpt_orchestrator(objective)
                 gpt_tasks = user_edit_gpt_tasks(gpt_tasks)
+                print("Write objective and context in file. Please wait, it will take some time...")
                 file.write(gpt_tasks + '\n')  # Write final result
                 gpt_result = gpt_orchestrator(gpt_tasks)
             else:
