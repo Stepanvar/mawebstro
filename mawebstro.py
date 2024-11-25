@@ -212,11 +212,11 @@ def gpt_orchestrator(objective):
             f"Context and Main Goal:\n{objective}\n\n"
             "Please perform the following steps, focusing on one task at a time:\n"
             "1. Generate **5 to 10 clarifying questions** to better understand the objective.\n"
-            "   - These questions should aim to uncover unmentioned information that will heavily impact the result and areas that need further clarification.\n"
+            "   - These questions should aim to uncover unmentioned information in different aspects of the objective that will heavily impact the result and areas that need further clarification.\n"
             "2. Rewrite the objective in a more **professional and concise** manner.\n"
             "   - Incorporate any assumptions or general knowledge relevant to the objective.\n"
-            "3. Identify and list key **insights and terms** related to the objective.\n"
-            "   - This should include important concepts, terminology, or considerations necessary for understanding and executing the tasks.\n"
+            "3. Identify and list **complex, professional** key **insights and terms** related to the objective.\n"
+            "   - This should include important really complex concepts, terminology, or considerations necessary for executing the tasks.\n"
             "4. Break down the rewritten objective into a **draft list of small, important, and meaningful sub-tasks** required to achieve the goal.\n"
             "   - Ensure each sub-task is **clear, actionable, and focused on providing key insights of a single aspect** of the overall objective.\n"
             "   - Organize the sub-tasks in a logical sequence that makes sense for execution.\n"
@@ -225,8 +225,8 @@ def gpt_orchestrator(objective):
             "  List the clarifying questions in a numbered format.\n"
             "- **Rewritten Objective**:\n"
             "  Provide the rewritten objective.\n"
-            "- **Key Insights and Terms**:\n"
-            "  List the key insights and terms.\n"
+            "- **Complex Key Insights and Terms**:\n"
+            "  List the complex key insights and terms.\n"
             "- **Draft List of Sub-Tasks**:\n"
             "  Provide the list of sub-tasks in a numbered format (5 to 8 tasks).\n"
             "  Each sub-task should be concise, ideally from one to three sentences.\n\n"
@@ -238,6 +238,8 @@ def gpt_orchestrator(objective):
             "Please generate **only** the content as specified."
         )
         is_first_call = False
+        # Use the 'o1-mini' model tab
+        tab = tabs.get("o1-preview")
     else:
         prompt = (
             f"Instruction Block: {objective}\n"
@@ -253,9 +255,8 @@ def gpt_orchestrator(objective):
             "- **If all sub-tasks (maximum of 8) are completed**, include 'The task is complete.' at the beginning and do **not** provide further tasks or prompts.\n\n"
             "Please provide only the prompt for the sub-agent, formatted exactly as specified."
     )
-
-    # Use the 'o1-mini' model tab
-    tab = tabs.get("o1-mini")
+        # Use the 'o1-mini' model tab
+        tab = tabs.get("o1-mini")
     if tab is None:
         return ""
 
@@ -288,7 +289,7 @@ def user_edit_gpt_tasks(gpt_result):
         user_input = gpt_result
 
     # Send the user's input to the 'o1-mini' GPT model
-    tab = tabs.get("o1-mini")
+    tab = tabs.get("o1-preview")
     if tab is None:
         return ""
     prompt = (
@@ -330,7 +331,7 @@ def gpt_sub_agent(sub_task_prompt):
             "- **Clarity and Precision**: Ensure that each section is clear, precise, directly related to the sub-task, and avoid unnecessary details..\n"
             "- **Address Missing Elements**: If you encounter any missing elements or require additional context to complete the task, provide suggestions or next steps to obtain the necessary information.\n"
             "- **Answer Format**: Focus on generating prompts or outputs optimized for GPT processing, rather than for end-user.\n"
-            "- **Avoid repeating infromation: **Do not repeat** information from the prompt or previous responses.\n"
+            "- **Avoid repeating information: **Do not repeat** information from the prompt or previous responses.\n"
             "Please provide **only** the information as specified above."
     )
     # Interact with GPT
@@ -404,7 +405,10 @@ def main():
                 gpt_tasks = user_edit_gpt_tasks(gpt_tasks)
                 print("Write objective and context in file. Please wait, it will take some time...")
                 file.write(gpt_tasks + '\n')  # Write final result
-                gpt_result = gpt_orchestrator(gpt_tasks)
+                if len(objective) > 10000:
+                    gpt_result = gpt_orchestrator(objective + gpt_tasks)
+                else:
+                    gpt_result = gpt_orchestrator(gpt_tasks)
             else:
                 gpt_result = gpt_orchestrator(objective)
             if "The task is complete" in gpt_result:
