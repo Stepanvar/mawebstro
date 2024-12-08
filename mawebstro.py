@@ -65,7 +65,7 @@ def initialize_browser():
 
     # URLs for each model
     urls = {
-        "o1-preview": "https://chat.openai.com/?model=o1-preview",
+        "o1": "https://chat.openai.com/?model=o1",
         "o1-mini": "https://chat.openai.com/?model=o1-mini",
         "gpt-4o": "https://chat.openai.com/?model=gpt-4o",
     }
@@ -83,7 +83,7 @@ def initialize_browser():
         tabs[model_name] = tab
 
     # Check if login is required
-    current_url = tabs["o1-preview"].Runtime.evaluate(
+    current_url = tabs["o1"].Runtime.evaluate(
         expression="window.location.href"
     )["result"].get("value", "")
     if "login" in current_url or "auth0" in current_url:
@@ -209,51 +209,53 @@ def gpt_orchestrator(objective):
     # Construct the prompt
     if is_first_call:
         prompt = (
-            f"Context and Main Goal:\n{objective}\n\n"
-            "Please perform the following steps, focusing on one task at a time:\n"
-            "1. Generate **5 to 10 clarifying questions** to better understand the objective.\n"
-            "   - These questions should aim to uncover unmentioned information in different aspects of the objective that will heavily impact the result and areas that need further clarification.\n"
-            "2. Rewrite the objective in a more **professional and concise** manner.\n"
-            "   - Incorporate any assumptions or general knowledge relevant to the objective.\n"
-            "3. Identify and list **complex, professional** key **insights and terms** related to the objective.\n"
-            "   - This should include important really complex concepts, terminology, or considerations necessary for executing the tasks.\n"
-            "4. Break down the rewritten objective into a **draft list of small, important, and meaningful sub-tasks** required to achieve the goal.\n"
-            "   - Ensure each sub-task is **clear, actionable, and focused on providing key insights of a single aspect** of the overall objective.\n"
-            "   - Organize the sub-tasks in a logical sequence that makes sense for execution.\n"
-            "Output Format:\n"
-            "- **Clarifying Questions**:\n"
-            "  List the clarifying questions in a numbered format.\n"
-            "- **Rewritten Objective**:\n"
-            "  Provide the rewritten objective.\n"
-            "- **Complex Key Insights and Terms**:\n"
-            "  List the complex key insights and terms.\n"
-            "- **Draft List of Sub-Tasks**:\n"
-            "  Provide the list of sub-tasks in a numbered format (5 to 8 tasks).\n"
-            "  Each sub-task should be concise, ideally from one to three sentences.\n\n"
-            "Important Guidelines:\n"
-            "- Focus on one step at a time and avoid combining multiple tasks into one.\n"
-            "- **Do not** include any additional explanations or introductions.\n"
-            "- The content is intended for the user to review and edit, so clarity is paramount.\n"
-            "- If any assumptions are made, **highlight them** so the user can adjust as needed.\n\n"
-            "Please generate **only** the content as specified."
+            f"""**Objective:**  
+Produce four specific outputs to clarify and structure the initial objective:
+1. Generate 5–10 **Clarifying Questions**.
+2. Provide a **Rewritten Objective** in a concise, professional manner.
+3. List ≥20 **Complex Key Insights and Terms** (comma-separated).
+4. Present 5–8 **Draft Sub-Tasks** in logical order.
+
+**Guidelines:**  
+- Use simple, direct language and avoid unnecessary complexity.
+- Do not include additional explanations beyond the requested sections.
+- If assumptions are made, list them at the end.
+
+**Input:**  
+{objective}
+
+**Output Format:**  
+1. **Clarifying Questions** (numbered)  
+2. **Rewritten Objective**  
+3. **Complex Key Insights and Terms** (≥20, comma-separated)  
+4. **Draft Sub-Tasks** (numbered, each concise, focusing on a single aspect)  
+**Assumptions (if any):** [List here]
+
+If no relevant details can be identified, write: **"No data available."**"""
         )
         is_first_call = False
         # Use the 'o1-mini' model tab
-        tab = tabs.get("o1-preview")
+        tab = tabs.get("o1")
     else:
         prompt = (
-            f"Instruction Block: {objective}\n"
-            "You are an orchestrator for sub-agents. Please generate the prompt for a sub-agent to execute the **next sub-task**. Consider the current state of the project, context of the project and the previously generated list of sub-tasks. You can adjust the next sub-task description if it will generate result with more new insigths.\n\n"
-            "The prompt should include the following sections **only**:\n"
-            "1. **Main Task Description**: Present the main instruction or task for the sub-agent to execute. Focus on one sub-task only.\n"
-            "2. **Completed Tasks (if any)**: List the main tasks that have already been completed in the short form.\n"
-            "3. **Task-related Context**: Provide any relevant context or information specific to this task to help the sub-agent perform it effectively, for example part of created content for enhancing.\n\n"
-            "Important Guidelines:\n"
-            "- Do **not** include any additional text outside of these sections.\n"
-            "- Do **not** list all remaining sub-tasks or duplicate tasks.\n\n"
-            "Completion Instructions:\n"
-            "- **If all sub-tasks (maximum of 8) are completed**, include 'The task is complete.' at the beginning and do **not** provide further tasks or prompts.\n\n"
-            "Please provide only the prompt for the sub-agent, formatted exactly as specified."
+            f"""**Objective:**  
+Create a prompt for a sub-agent to execute the next single sub-task, referencing previously completed tasks and current context.
+
+**Guidelines:**  
+- Provide only the sections requested, in a simple, structured format.
+- If all sub-tasks are completed, start with: **"The main task is complete."** and provide no further tasks.
+- Highlight any assumptions at the end.
+
+**Input:**  
+{objective}
+
+**Output Format:**  
+1. **Main Task Description**: A single, clearly defined action item.  
+2. **Completed Tasks (Short Form)**: A brief, factual list of what’s done.  
+3. **Task-Related Context**: Relevant details for this specific sub-task.  
+**Assumptions (if any):** [List here]
+
+If no relevant data, write: **"No data available."**"""
     )
         # Use the 'o1-mini' model tab
         tab = tabs.get("o1-mini")
@@ -289,24 +291,28 @@ def user_edit_gpt_tasks(gpt_result):
         user_input = gpt_result
 
     # Send the user's input to the 'o1-mini' GPT model
-    tab = tabs.get("o1-preview")
+    tab = tabs.get("o1")
     if tab is None:
         return ""
     prompt = (
-        f"User-Approved Tasks and Information:\n{user_input}\n\n"
-        "Please perform the following steps:\n"
-        "1. **Consider the user's input as high-priority** and make sure to incorporate their edits or instructions accurately.\n"
-        "   - If the user has indicated that a task should be skipped, ensure it is **excluded** from the revised list.\n"
-        "2. Use the provided tasks as a reference to generate any further necessary sub-tasks that align with the overall objective.\n"
-        "3. Write a **revised version of the task list** in the proper format, ensuring clarity and logical sequence.\n\n"
-        "Output Format:\n"
-        "- Present the revised task list in a numbered format with short description of each task.\n"
-        "- Each task should be concise, clear, and actionable.\n\n"
-        "Important Guidelines:\n"
-        "- **Do not** include any additional explanations or introductions.\n"
-        "- **Do not** reinstate any tasks the user has asked to skip.\n"
-        "- Ensure that the revised task list reflects the user's priorities and instructions.\n\n"
-        "Please generate **only** the revised task list as specified."
+        f"""**Objective:**  
+Revise the task list and objective based on user-approved edits, ensuring no removed tasks are reinstated and all user priorities are integrated.
+
+**Guidelines:**  
+- Maintain clarity, logical order, and directness.
+- Do not add explanations beyond what’s requested.
+- Highlight assumptions at the end if needed.
+
+**Input:**  
+{user_input}
+
+**Output Format:**  
+1. **Revised Objective + Short Description**: Incorporate user changes, keep it concise.  
+2. **List of Complex Terms**: Unaltered terms listed earlier or generate new one if none was generated.  
+3. **Revised Task List (Numbered)**: Reflect user edits, ensure sequence is logical, concise.  
+**Assumptions (if any):** [List here]
+
+If user edits remove all tasks, write: **"No tasks remain."**"""
     )
 
     # Interact with GPT
@@ -323,16 +329,25 @@ def gpt_sub_agent(sub_task_prompt):
     if tab is None:
         return ""
     sub_task_prompt += (
-            "Your response should include the following sections **only**:\n"
-            "1. **Context for Further Task Completion**: Briefly describe any relevant context or information that will assist in the completion of subsequent tasks.\n"
-            "2. **Result of the Completed Task**: [Provide code or the information that you was told to generate].\n"
-            "3. **Considerations and Recommendations**: Offer any insights, suggestions, or additional information that may be valuable for future and current steps.\n\n"
-            "Important Guidelines:\n"
-            "- **Clarity and Precision**: Ensure that each section is clear, precise, directly related to the sub-task, and avoid unnecessary details..\n"
-            "- **Address Missing Elements**: If you encounter any missing elements or require additional context to complete the task, provide suggestions or next steps to obtain the necessary information.\n"
-            "- **Answer Format**: Focus on generating prompts or outputs optimized for GPT processing, rather than for end-user.\n"
-            "- **Avoid repeating information: **Do not repeat** information from the prompt or previous responses.\n"
-            "Please provide **only** the information as specified above."
+            f"""**Objective:**  
+Provide the sub-agent with the necessary context, direct result requirements, and future considerations for completing the given sub-task.
+
+**Guidelines:**
+- Use your all available features for completing this sub-task like finding articles, searching in the internet and so on.
+- Output only the required sections.
+- Keep language direct and avoid repeating information.
+- If assumptions are made, list them at the end.
+
+**Input:**  
+{sub_task_prompt}
+
+**Output Format:**  
+1. **Context for Further Task Completion**: Briefly outline relevant background or data.  
+2. **Result of the Completed Task**: Present the requested output directly (e.g., code, analysis).  
+3. **Considerations and Recommendations**: Short suggestions for next steps or improvements.  
+**Assumptions (if any):** [List here]
+
+If no relevant data found, write: **"No data available."**"""
     )
     # Interact with GPT
     try:
@@ -345,18 +360,26 @@ def gpt_sub_agent(sub_task_prompt):
 def gpt_refine(objective):
     # Construct the prompt
     prompt = (
-        f"Objective: {objective}\n\n"
-        "Please refine the sub-task results into a cohesive final output, adding any missing information. Focus on providing the most appropriate result considering the objective.\n\n"
-        "Important Guidelines:\n"
-        "- Ensure the final output is clear, concise, and logically structured.\n"
-        "- Focus solely on content relevant to achieving the objective.\n"
-        "- Do **not** include any additional explanations or introductions.\n"
-        "- If any assumptions are made, **highlight them** so the user can adjust as needed.\n\n"
-        "Please generate **only** the refined final output as specified."
+        f"""**Objective:**  
+Refine and consolidate all previous outputs into a coherent, final result that meets the overarching objective.
+
+**Guidelines:**  
+- Focus solely on producing a clear, logically structured final output.
+- Do not add extra explanations.
+- Highlight assumptions if any.
+
+**Input:**  
+{objective}
+
+**Output Format:**  
+- Present the final integrated result, clearly and concisely.  
+**Assumptions (if any):** [List here]
+
+If no meaningful refinement is possible, write: **"No refinements applicable."**"""
     )
 
-    # Use the 'o1-preview' model tab
-    tab = tabs.get("o1-preview")
+    # Use the 'o1' model tab
+    tab = tabs.get("o1")
 
     # Interact with GPT
     try:
@@ -434,7 +457,7 @@ def main():
     with open(output_filename, "w", encoding='utf-8') as file:
         for i in range(0, len(refined_output), chunk_size):
             file.write(refined_output[i:i + chunk_size])
-
+    print(f"Output written to {output_filename}")
 
 if __name__ == "__main__":
     main()

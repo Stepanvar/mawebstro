@@ -202,10 +202,10 @@ def gpt_orchestrator(objective):
         prompt = (
             f"""**Objective:**  
 Produce four specific outputs to clarify and structure the initial objective:
-1. Generate 5–10 **Clarifying Questions**.
+1. Generate 5â€“10 **Clarifying Questions**.
 2. Provide a **Rewritten Objective** in a concise, professional manner.
-3. List ≥20 **Complex Key Insights and Terms** (comma-separated).
-4. Present 5–8 **Draft Sub-Tasks** in logical order.
+3. List â‰¥20 **Complex Key Insights and Terms** (comma-separated).
+4. Present 5â€“8 **Draft Sub-Tasks** in logical order.
 
 **Guidelines:**  
 - Use simple, direct language and avoid unnecessary complexity.
@@ -218,7 +218,7 @@ Produce four specific outputs to clarify and structure the initial objective:
 **Output Format:**  
 1. **Clarifying Questions** (numbered)  
 2. **Rewritten Objective**  
-3. **Complex Key Insights and Terms** (≥20, comma-separated)  
+3. **Complex Key Insights and Terms** (â‰¥20, comma-separated)  
 4. **Draft Sub-Tasks** (numbered, each concise, focusing on a single aspect)  
 **Assumptions (if any):** [List here]
 
@@ -242,7 +242,7 @@ Create a prompt for a sub-agent to execute the next single sub-task, referencing
 
 **Output Format:**  
 1. **Main Task Description**: A single, clearly defined action item.  
-2. **Completed Tasks (Short Form)**: A brief, factual list of what’s done.  
+2. **Completed Tasks (Short Form)**: A brief, factual list of whatâ€™s done.  
 3. **Task-Related Context**: Relevant details for this specific sub-task.  
 **Assumptions (if any):** [List here]
 
@@ -291,7 +291,7 @@ Revise the task list and objective based on user-approved edits, ensuring no rem
 
 **Guidelines:**  
 - Maintain clarity, logical order, and directness.
-- Do not add explanations beyond what’s requested.
+- Do not add explanations beyond whatâ€™s requested.
 - Highlight assumptions at the end if needed.
 
 **Input:**  
