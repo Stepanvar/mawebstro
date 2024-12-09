@@ -166,7 +166,7 @@ def gpt_interact(tab, prompt, update_interval=2, timeout=120):
 
             elapsed_time = time.time() - start_time
             if elapsed_time > timeout:
-                raise TimeoutError("Waiting for new message timed out.")
+                break
             else:
                 time.sleep(update_interval)  # Wait before checking again
 
@@ -195,7 +195,7 @@ def gpt_interact(tab, prompt, update_interval=2, timeout=120):
                 previous_text = response_text
             elapsed_time = time.time() - start_time
             if elapsed_time > timeout:
-                raise TimeoutError("Waiting for response timed out.")
+                return response_text
             else:
                 time.sleep(4)  # Check every 4 seconds
 
@@ -209,20 +209,20 @@ def gpt_orchestrator(objective):
     # Construct the prompt
     if is_first_call:
         prompt = (
-            f"""**Objective:**  
+            """**Objective:**  
 Produce four specific outputs to clarify and structure the initial objective:
 1. Generate 5–10 **Clarifying Questions**.
 2. Provide a **Rewritten Objective** in a concise, professional manner.
 3. List ≥20 **Complex Key Insights and Terms** (comma-separated).
 4. Present 5–8 **Draft Sub-Tasks** in logical order.
 
-**Guidelines:**  
+**Guidelines:**
+- Make sure to provide answer in **the defined in this prompt format** without intermediate ones or just clarification questions.
 - Use simple, direct language and avoid unnecessary complexity.
 - Do not include additional explanations beyond the requested sections.
 - If assumptions are made, list them at the end.
 
-**Input:**  
-{objective}
+**Input:**""" + objective + """
 
 **Output Format:**  
 1. **Clarifying Questions** (numbered)  
@@ -230,15 +230,14 @@ Produce four specific outputs to clarify and structure the initial objective:
 3. **Complex Key Insights and Terms** (≥20, comma-separated)  
 4. **Draft Sub-Tasks** (numbered, each concise, focusing on a single aspect)  
 **Assumptions (if any):** [List here]
-
-If no relevant details can be identified, write: **"No data available."**"""
+"""
         )
         is_first_call = False
         # Use the 'o1-mini' model tab
         tab = tabs.get("o1")
     else:
         prompt = (
-            f"""**Objective:**  
+            """**Objective:**  
 Create a prompt for a sub-agent to execute the next single sub-task, referencing previously completed tasks and current context.
 
 **Guidelines:**  
@@ -246,16 +245,15 @@ Create a prompt for a sub-agent to execute the next single sub-task, referencing
 - If all sub-tasks are completed, start with: **"The main task is complete."** and provide no further tasks.
 - Highlight any assumptions at the end.
 
-**Input:**  
-{objective}
+**Input:**
+""" + objective + """
 
 **Output Format:**  
 1. **Main Task Description**: A single, clearly defined action item.  
 2. **Completed Tasks (Short Form)**: A brief, factual list of what’s done.  
 3. **Task-Related Context**: Relevant details for this specific sub-task.  
 **Assumptions (if any):** [List here]
-
-If no relevant data, write: **"No data available."**"""
+"""
     )
         # Use the 'o1-mini' model tab
         tab = tabs.get("o1-mini")
@@ -295,7 +293,7 @@ def user_edit_gpt_tasks(gpt_result):
     if tab is None:
         return ""
     prompt = (
-        f"""**Objective:**  
+        """**Objective:**  
 Revise the task list and objective based on user-approved edits, ensuring no removed tasks are reinstated and all user priorities are integrated.
 
 **Guidelines:**  
@@ -303,16 +301,15 @@ Revise the task list and objective based on user-approved edits, ensuring no rem
 - Do not add explanations beyond what’s requested.
 - Highlight assumptions at the end if needed.
 
-**Input:**  
-{user_input}
+**Input:
+**""" + user_input + """
 
 **Output Format:**  
-1. **Revised Objective + Short Description**: Incorporate user changes, keep it concise.  
-2. **List of Complex Terms**: Unaltered terms listed earlier or generate new one if none was generated.  
-3. **Revised Task List (Numbered)**: Reflect user edits, ensure sequence is logical, concise.  
+a. **Revised Objective + Short Description**: Incorporate user changes, keep it concise.  
+b. **List of Complex Terms**: Unaltered terms listed earlier or generate new one if none was generated.  
+c. **Revised Task List (Numbered)**: Reflect user edits, ensure sequence is logical, concise.  
 **Assumptions (if any):** [List here]
-
-If user edits remove all tasks, write: **"No tasks remain."**"""
+"""
     )
 
     # Interact with GPT
@@ -320,7 +317,6 @@ If user edits remove all tasks, write: **"No tasks remain."**"""
         response_text = gpt_interact(tab, prompt, 8)
     except TimeoutError as e:
         response_text = ""
-
     return response_text
 
 def gpt_sub_agent(sub_task_prompt):
@@ -329,25 +325,18 @@ def gpt_sub_agent(sub_task_prompt):
     if tab is None:
         return ""
     sub_task_prompt += (
-            f"""**Objective:**  
-Provide the sub-agent with the necessary context, direct result requirements, and future considerations for completing the given sub-task.
-
+            """
 **Guidelines:**
-- Use your all available features for completing this sub-task like finding articles, searching in the internet and so on.
+- Use your all available features for completing this sub-task like finding articles, talking to external sources, and searching in the internet and so on.
 - Output only the required sections.
 - Keep language direct and avoid repeating information.
 - If assumptions are made, list them at the end.
-
-**Input:**  
-{sub_task_prompt}
-
 **Output Format:**  
 1. **Context for Further Task Completion**: Briefly outline relevant background or data.  
 2. **Result of the Completed Task**: Present the requested output directly (e.g., code, analysis).  
 3. **Considerations and Recommendations**: Short suggestions for next steps or improvements.  
 **Assumptions (if any):** [List here]
-
-If no relevant data found, write: **"No data available."**"""
+"""
     )
     # Interact with GPT
     try:
@@ -360,7 +349,7 @@ If no relevant data found, write: **"No data available."**"""
 def gpt_refine(objective):
     # Construct the prompt
     prompt = (
-        f"""**Objective:**  
+        """**Objective:**  
 Refine and consolidate all previous outputs into a coherent, final result that meets the overarching objective.
 
 **Guidelines:**  
@@ -368,14 +357,12 @@ Refine and consolidate all previous outputs into a coherent, final result that m
 - Do not add extra explanations.
 - Highlight assumptions if any.
 
-**Input:**  
-{objective}
+**Input:**""" + objective + """
 
 **Output Format:**  
 - Present the final integrated result, clearly and concisely.  
 **Assumptions (if any):** [List here]
-
-If no meaningful refinement is possible, write: **"No refinements applicable."**"""
+"""
     )
 
     # Use the 'o1' model tab
@@ -386,7 +373,6 @@ If no meaningful refinement is possible, write: **"No refinements applicable."**
         response_text = gpt_interact(tab, prompt, 15)
     except TimeoutError as e:
         response_text = ""
-
     return response_text
 
 def main():
@@ -428,7 +414,7 @@ def main():
                 gpt_tasks = user_edit_gpt_tasks(gpt_tasks)
                 print("Write objective and context in file. Please wait, it will take some time...")
                 file.write(gpt_tasks + '\n')  # Write final result
-                if len(objective) > 10000:
+                if len(objective) < 15000:
                     gpt_result = gpt_orchestrator(objective + gpt_tasks)
                 else:
                     gpt_result = gpt_orchestrator(gpt_tasks)
