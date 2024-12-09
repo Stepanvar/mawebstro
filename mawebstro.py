@@ -242,7 +242,7 @@ Create a prompt for a sub-agent to execute the next single sub-task, referencing
 
 **Guidelines:**  
 - Provide only the sections requested, in a simple, structured format.
-- If all sub-tasks are completed, start with: **"The main task is complete."** and provide no further tasks.
+- If all sub-tasks are complete **maximum 8**, start with: **"All tasks are complete."** and provide no further tasks. Please be **attentive** and precise of it.
 - Highlight any assumptions at the end.
 
 **Input:**
@@ -335,7 +335,6 @@ def gpt_sub_agent(sub_task_prompt):
 1. **Context for Further Task Completion**: Briefly outline relevant background or data.  
 2. **Result of the Completed Task**: Present the requested output directly (e.g., code, analysis).  
 3. **Considerations and Recommendations**: Short suggestions for next steps or improvements.  
-**Assumptions (if any):** [List here]
 """
     )
     # Interact with GPT
@@ -420,8 +419,8 @@ def main():
                     gpt_result = gpt_orchestrator(gpt_tasks)
             else:
                 gpt_result = gpt_orchestrator(objective)
-            if "The task is complete" in gpt_result:
-                objective = gpt_result.replace("The task is complete:", "").strip()
+            if "tasks are complete" in gpt_result:
+                objective = gpt_result.replace("tasks are complete:", "").strip()
                 break
             else:
                 # Execute the sub-task using the GPT sub-agent

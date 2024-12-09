@@ -9,7 +9,7 @@ Revised Task List (Numbered):
     Refine the user_edit_gpt_tasks prompt to optimize user-driven adjustments.
     Strengthen the gpt_sub_agent prompt for minimal resource use on Windows.
     Update the gpt_refine prompt for a polished final output.
-    Incorporate cross-platform considerations with emphasis on Windows.
+    Incorporate cross-platform considerations with emphasis on Windows and android.
     Suggest enhancements to improve reliability, performance, and maintainability.
 Assumptions (if any):
     Predefined models remain unchanged.
