@@ -209,50 +209,64 @@ def gpt_orchestrator(objective):
     # Construct the prompt
     if is_first_call:
         prompt = (
-            """**Objective:**  
-Produce four specific outputs to clarify and structure the initial objective:
-1. Generate 5–10 **Clarifying Questions**.
-2. Provide a **Rewritten Objective** in a concise, professional manner.
-3. List ≥20 **Complex Key Insights and Terms** (comma-separated).
-4. Present 5–8 **Draft Sub-Tasks** in logical order.
+            """### Goal:
+Understand the user's main task and identify missing details, preferred methods, technologies, and a preliminary breakdown of subtasks.
 
-**Guidelines:**
-- Make sure to provide answer in **the defined in this prompt format** without intermediate ones or just clarification questions.
-- Use simple, direct language and avoid unnecessary complexity.
-- Do not include additional explanations beyond the requested sections.
-- If assumptions are made, list them at the end.
+### Instructions:
+1. Analyze the provided description of the task.
+2. Generate 5-10 clarifying questions in different fields aimed at:
+   - Missing information about the task's context.
+   - User preferences for methods, technologies, and specific requirements not mentioned.
+3. Provide preliminary short options for the clarifying questions where possible.
+4. Propose a preliminary list of subtasks based on the understanding of the main task.
 
-**Input:**""" + objective + """
+### Constraints and Assumptions:
+- **Constraints:**
+  1. Avoid making assumptions about user preferences without clarification.
+  2. Avoid using similar questions.
+- **Assumptions:**
+  1. The user seeks a detailed understanding of their task.
+  2. The generated subtasks are a draft and may need refinement.
 
-**Output Format:**  
-1. **Clarifying Questions** (numbered)  
-2. **Rewritten Objective**  
-3. **Complex Key Insights and Terms** (≥20, comma-separated)  
-4. **Draft Sub-Tasks** (numbered, each concise, focusing on a single aspect)  
-**Assumptions (if any):** [List here]
+### Input:
+""" + objective + """
+
+### Output Format:
+- **Clarifying Questions:** A list of 5-10 clarifying questions. For each question, provide a potential answer or suggest options if relevant.
+- **Preliminary Subtasks:** A numbered list of subtasks based on the task description.
+- **Key Insights:**
+  1. [Summarize any critical information or patterns from the user's input.]
+  2. [Highlight connections between various aspects of the task.]
+  3. [Mention any gaps or ambiguities in the provided information.]
 """
         )
         is_first_call = False
         # Use the 'o1-mini' model tab
-        tab = tabs.get("o1")
+        tab = tabs.get("o1-mini")
     else:
         prompt = (
-            """**Objective:**  
-Create a prompt for a sub-agent to execute the next single sub-task, referencing previously completed tasks and current context.
+            """### Goal:
+You are an intelligent orchestrator managing GPT models designed for education and code generation. Generate a clear and specific prompt for executing a subtask, incorporating all relevant context.
 
-**Guidelines:**  
-- Provide only the sections requested, in a simple, structured format.
-- If all sub-tasks are complete **maximum 8**, start with: **"All tasks are complete."** and provide no further tasks. Please be **attentive** and precise of it.
-- Highlight any assumptions at the end.
+### Instructions:
+1. Identify the next subtask from the provided list.
+2. Extract only the context necessary for this subtask and ensure it provides all required details for execution.
+3. Define the required output format for the subtask.
+4. If all sub-tasks are complete **maximum 10**, start with: **"All tasks are complete."** and provide no further tasks. Please be **attentive** and precise of it.
 
-**Input:**
+### Constraints and Assumptions:
+- **Constraints:**
+  1. Focus only on the current subtask.
+  2. Avoid duplicating information in the sub-tasks's context.
+- **Assumptions:**
+  1. The subtask will contribute to the main task's completion.
+
+### Input:
 """ + objective + """
 
-**Output Format:**  
-1. **Main Task Description**: A single, clearly defined action item.  
-2. **Completed Tasks (Short Form)**: A brief, factual list of what’s done.  
-3. **Task-Related Context**: Relevant details for this specific sub-task.  
-**Assumptions (if any):** [List here]
+### Output Format:
+- Clear subtask description.
+- Context and requirements for the subtask. Relevant information from the overarching context that applies to this subtask.
 """
     )
         # Use the 'o1-mini' model tab
@@ -289,26 +303,41 @@ def user_edit_gpt_tasks(gpt_result):
         user_input = gpt_result
 
     # Send the user's input to the 'o1-mini' GPT model
-    tab = tabs.get("o1")
+    tab = tabs.get("o1-mini")
     if tab is None:
         return ""
     prompt = (
-        """**Objective:**  
-Revise the task list and objective based on user-approved edits, ensuring no removed tasks are reinstated and all user priorities are integrated.
+        """### Goal:
+Create a structured and professional description of the task and its context, ensuring missing information is addressed and tasks are logically refined.
 
-**Guidelines:**  
-- Maintain clarity, logical order, and directness.
-- Do not add explanations beyond what’s requested.
-- Highlight assumptions at the end if needed.
+### Instructions:
+1. Identify and prioritize any missing critical information necessary for task completion before rewriting the task description.
+2. Rewrite the task description in a concise and professional format.
+3. Define the main goal and a logical list of subtasks, ensuring:
+   - Extremely professional terminology is used.
+   - Tasks are actionable and organized in a logical sequence.
+   - Considering provided user input information IN PRIORITY. USE IT AS REFERENCE AND CONTEXT.
 
-**Input:
-**""" + user_input + """
+### Constraints and Assumptions:
+- **Constraints:**
+  1. Do not omit any critical details provided by the user.
+  2. **Maximum** amount of **10** subtasks in list(in 10 subtasks, use 2 default first ones: to address missing information, refining existing subtasks based on received information).
+- **Assumptions:**
+  1. The rewritten version will guide further steps and sub-agents.
 
-**Output Format:**  
-a. **Revised Objective + Short Description**: Incorporate user changes, keep it concise.  
-b. **List of Complex Terms**: Unaltered terms listed earlier or generate new one if none was generated.  
-c. **Revised Task List (Numbered)**: Reflect user edits, ensure sequence is logical, concise.  
-**Assumptions (if any):** [List here]
+### User input:
+""" + user_input + """
+
+
+### Output Format:
+- **Main Task Description:** A concise and professional task description.
+- **Subtasks:** A numbered list of subtasks.
+- **Key Assumptions:** A brief summary of assumptions based on the current context.
+- **Key Insights:**
+  1. [Summarize any critical patterns or themes in the user’s input.]
+  2. [Highlight the most significant gaps in the provided details.]
+  3. [Note any specific connections between subtasks and the main goal.]
+
 """
     )
 
@@ -326,15 +355,22 @@ def gpt_sub_agent(sub_task_prompt):
         return ""
     sub_task_prompt += (
             """
-**Guidelines:**
-- Use your all available features for completing this sub-task like finding articles, talking to external sources, and searching in the internet and so on.
-- Output only the required sections.
-- Keep language direct and avoid repeating information.
-- If assumptions are made, list them at the end.
-**Output Format:**  
-1. **Context for Further Task Completion**: Briefly outline relevant background or data.  
-2. **Result of the Completed Task**: Present the requested output directly (e.g., code, analysis).  
-3. **Considerations and Recommendations**: Short suggestions for next steps or improvements.  
+### Instructions:
+1. Use the provided context to perform the subtask and **all** available features for completing this sub-task like **finding articles**, **talking to external sources**, **searching in the internet**, and so on.
+2. If the context is insufficient, propose 2-3 simple, alternative solutions that align with the overarching goal.
+3. Ensure none of the solutions are overly complex or deviate significantly from the task's scope.
+4. Review the results to ensure they meet the requirements and are free of significant errors.
+ 
+
+### Constraints and Assumptions:
+- **Constraints:**
+  1. Do not introduce drastic changes to the MAIN task's approach.
+- **Assumptions:**
+  1. Medium variations in implementation are acceptable.
+
+### Output Format:
+- [Completed task **result or multiple solutions**, each described succinctly.]
+- Report any new information or insights gained during the task execution.
 """
     )
     # Interact with GPT
@@ -348,24 +384,32 @@ def gpt_sub_agent(sub_task_prompt):
 def gpt_refine(objective):
     # Construct the prompt
     prompt = (
-        """**Objective:**  
-Refine and consolidate all previous outputs into a coherent, final result that meets the overarching objective.
+        """### Goal:
+Analyze and finalize the results of all subtasks into a complete and cohesive solution for the main task.
 
-**Guidelines:**  
-- Focus solely on producing a clear, logically structured final output.
-- Do not add extra explanations.
-- Highlight assumptions if any.
+### Instructions:
+1. Consolidate outputs from all subtasks into a cohesive result, ensuring logical flow and alignment with the main task.
+2. Fill in any missing elements based on the task's context or assumptions where necessary.
+3. Validate and correct any inconsistencies or errors in the intermediate results.
+4. Ensure that the final solution fully addresses all aspects of the main task.
 
-**Input:**""" + objective + """
+### Constraints and Assumptions:
+- **Constraints:**
+  1. Avoid introducing new subtasks or significant deviations from the original task.
+  2. Maintain consistency with the user's goals and the provided context.
 
-**Output Format:**  
-- Present the final integrated result, clearly and concisely.  
-**Assumptions (if any):** [List here]
+### Input:
+""" + objective + """
+
+### Output Format:
+- **Final Result:** Provide a clear and concise solution that addresses the main task in full.
+- **Corrections and Assumptions:** Include a section explaining any corrections, assumptions, or adjustments made during the consolidation process.
+
 """
     )
 
     # Use the 'o1' model tab
-    tab = tabs.get("o1")
+    tab = tabs.get("o1-mini")
 
     # Interact with GPT
     try:
@@ -387,7 +431,7 @@ def main():
     # Check if the input is a file path
     if os.path.isfile(user_input):
         try:
-            with open(user_input, 'r') as file:
+            with open(user_input, 'r', encoding='utf-8') as file:
                 objective = file.read().strip()
         except Exception as e:
             sys.exit(f"An error occurred while reading the file: {e}")
@@ -406,6 +450,7 @@ def main():
     with open('gpt_all_context.txt', 'a', encoding='utf-8') as file:
         # Main loop to orchestrate tasks until completion
         file.write(objective + '\n')  # Write initial objective
+        input("Configure tabs as you like and press enter to continue...")
         while True:
             # Call the orchestrator with the objective
             if is_first_call:
