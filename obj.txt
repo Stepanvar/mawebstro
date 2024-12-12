@@ -1,2 +1,510 @@
-**Objective:**  
-Create simple python non-ui programm file for learning to use asynchronous commands: real-like project with detailed inline comments
+Objective:Develop a local, Python/Django-based MVP enabling researchers to select predefined SARS-CoV-2 targets, input compounds via SMILES or PDB, convert sequences to structures using PepSMI and AlphaFold, run local AutoDock Vina docking simulations, display basic affinity scores, visualize compound structures, and perform Tanimoto-based similarity checks against known drugs. All targets are equally accessible, with a focus on core functionalities only.Tasks:Compound Input & Validation:Implement a page for SMILES input and PDB file upload.Integrate a molecular drawing tool for SMILES generation/editing.Validate SMILES (via RDKit) and ensure correct PDB formatting.Sequence Conversion & Structural Preparation:Convert short peptide/nucleotide sequences to SMILES using PepSMI.Use AlphaFold locally for longer sequences, generate CIF, then convert CIF to PDB.Prepare all inputs as PDBQT for docking.Docking Integration:Provide a page to select SARS-CoV-2 targets from a predefined list.Run AutoDock Vina locally, convert receptors from PDB to PDBQT, and perform docking.Parse results to extract and display affinity scores.Similarity & Repurposing Checks:Implement Tanimoto similarity calculations against a local known-drug library.Highlight drugs with notable similarity to the submitted compound.Result Display & Visualization:Present docking affinity scores and basic 3D structure visualizations.Offer user-friendly navigation and simple error handling.Assumptions (if any):Required tools (RDKit, PepSMI, AlphaFold, AutoDock Vina) and SARS-CoV-2 target structures are pre-installed and locally accessible.No performance optimization, documentation, testing, or CI/CD is required at this stage.Standard web-based visualization tools (e.g., 3Dmol.js) are sufficient for molecule rendering.
+answers: 
+1. No, use the latest stable releases of third-party packages
+2. Stored in a local database (SQLite).
+3. Non of functionality is working! Even draw molecule not working.
+4. Stored in the Django database via the Target model SQLITE
+5. Already implemented user login
+6. Linux-based fedora server with conda environment  
+8. Temporarily stored and only displayed
+9. Do not create tasks about interface, focus on functionality implementing  
+10. Through Python subprocess calls
+Tasks:  Remove 10th testing and 12th error handling tasks
+Already generated code:
+Filename: about.html  
+--------------------  
+{% extends "app/layout.html" %}
+
+{% block title %}About{% endblock %}
+
+{% block content %}
+<h2>{{ title }}</h2>
+<h3>{{ message }}</h3>
+
+<p>Use this area to provide additional information.</p>
+{% endblock %} 
+Filename: contact.html  
+--------------------  
+{% extends "app/layout.html" %}
+
+{% block content %}
+
+<h2>{{ title }}.</h2>
+<h3>{{ message }}</h3>
+
+{% endblock %}
+ 
+Filename: docking_results.html  
+--------------------  
+{% extends "app/layout.html" %}
+
+{% block title %}Docking Results{% endblock %}
+
+{% block content %}
+<h1>Docking Results</h1>
+<ul>
+	{% for score in affinity_scores %}
+	<li>Binding Affinity: {{ score }} kcal/mol</li>
+	{% empty %}
+	<li>No affinity scores available.</li>
+	{% endfor %}
+</ul>
+{% endblock %} 
+Filename: duplicate_screening_results.html  
+--------------------  
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Duplicate Screening Results</title>
+</head>
+<body>
+<h1>Duplicate Screening Results</h1>
+{% if similar_drugs %}
+<table>
+	<thead>
+	<tr>
+		<th>Drug Name</th>
+		<th>Similarity Score</th>
+	</tr>
+	</thead>
+	<tbody>
+	{% for drug in similar_drugs %}
+	<tr>
+		<td>{{ drug.name }}</td>
+		<td>{{ drug.similarity|floatformat:2 }}</td>
+	</tr>
+	{% endfor %}
+	</tbody>
+</table>
+{% else %}
+<p>No similar drugs found for the submitted compound.</p>
+{% endif %}
+</body>
+</html> 
+Filename: error.html  
+--------------------  
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Error</title>
+</head>
+<body>
+<h1>An Error Occurred</h1>
+<p>{{ errors }}</p>
+</body>
+</html> 
+Filename: index.html  
+--------------------  
+{% extends "app/layout.html" %}
+
+{% block title %}SARSilico Screener{% endblock %}
+
+{% block content %}
+<h1>Welcome to the SARSilico Screener</h1>
+<p>Use the navigation below to begin:</p>
+<ul>
+	<li><a href="{% url 'select_target' %}">Select a Target</a></li>
+	<li><a href="{% url 'upload_compound' %}">Upload a Compound</a></li>
+	<li><a href="{% url 'draw_molecule' %}">Draw a Small Molecule</a></li>
+	<li><a href="{% url 'convert_sequence' %}">Convert a Peptide or Nucleotide Sequence</a></li>
+	<li><a href="{% url 'process_sequence' %}">Process a Long Sequence with AlphaFold</a></li>
+</ul>
+{% endblock %} 
+Filename: layout.html  
+--------------------  
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>{% block title %}My Django Application{% endblock %}</title>
+	{% load static %}
+	<link rel="stylesheet" type="text/css" href="{% static 'app/content/bootstrap.min.css' %}" />
+	<link rel="stylesheet" type="text/css" href="{% static 'app/content/site.css' %}" />
+	<script src="{% static 'app/scripts/modernizr-2.6.2.js' %}"></script>
+</head>
+
+<body>
+<div class="navbar navbar-inverse navbar-fixed-top">
+	<div class="container">
+		<div class="navbar-header">
+			<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<a href="/" class="navbar-brand">SARSilico Screener</a>
+		</div>
+		<div class="navbar-collapse collapse">
+			<ul class="nav navbar-nav">
+				<li><a href="{% url 'home' %}">Home</a></li>
+				<li><a href="{% url 'about' %}">About</a></li>
+				<li><a href="{% url 'contact' %}">Contact</a></li>
+			</ul>
+			{% include 'app/loginpartial.html' %}
+		</div>
+	</div>
+</div>
+
+<div class="container body-content">
+	{% block content %}{% endblock %}
+	<hr />
+	<footer>
+		<p>&copy; {{ current_year }} - SARSilico Screener</p>
+	</footer>
+</div>
+
+<script src="{% static 'app/scripts/jquery-1.10.2.js' %}"></script>
+<script src="{% static 'app/scripts/bootstrap.js' %}"></script>
+<script src="{% static 'app/scripts/respond.js' %}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html> 
+Filename: login.html  
+--------------------  
+{% extends "app/layout.html" %}
+
+{% block content %}
+
+<h2>{{ title }}</h2>
+<div class="row">
+    <div class="col-md-8">
+        <section id="loginForm">
+            <form action="." method="post" class="form-horizontal">
+                {% csrf_token %}
+                <h4>Use a local account to log in.</h4>
+                <hr />
+                <div class="form-group">
+                    <label for="id_username" class="col-md-2 control-label">User name</label>
+                    <div class="col-md-10">
+                        {{ form.username }}
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="id_password" class="col-md-2 control-label">Password</label>
+                    <div class="col-md-10">
+                        {{ form.password }}
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-offset-2 col-md-10">
+                        <input type="hidden" name="next" value="/" />
+                        <input type="submit" value="Log in" class="btn btn-default" />
+                    </div>
+                </div>
+                {% if form.errors %}
+                <p class="validation-summary-errors">Please enter a correct user name and password.</p>
+                {% endif %}
+            </form>
+        </section>
+    </div>
+    <div class="col-md-4">
+        <section id="socialLoginForm"></section>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+
+    {% load static %}
+<script src="{% static 'app/scripts/jquery.validate.min.js' %}"></script>
+
+{% endblock %}
+ 
+Filename: loginpartial.html  
+--------------------  
+{% if user.is_authenticated %}
+<form id="logoutForm" action="/logout/" method="post" class="navbar-right">
+    {% csrf_token %}
+    <ul class="nav navbar-nav navbar-right">
+        <li><span class="navbar-brand">Hello {{ user.username }}!</span></li>
+        <li><a href="javascript:document.getElementById('logoutForm').submit()">Log off</a></li>
+    </ul>
+</form>
+
+{% else %}
+
+<ul class="nav navbar-nav navbar-right">
+    <li><a href="{% url 'login' %}">Log in</a></li>
+</ul>
+
+{% endif %}
+ 
+Filename: molecular_drawing.html  
+--------------------  
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Molecular Drawing</title>
+	<script src="https://chemapps.stolaf.edu/jsme/jsme.nocache.js"></script>
+	<script>var jsmeApplet;
+		function jsmeOnLoad() {
+			jsmeApplet = new JSApplet.JSME("jsme_container", "500px", "500px");
+		}
+		function getSmiles() {
+			var smiles = jsmeApplet.smiles();
+			document.getElementById("smiles_output").value = smiles;
+		}</script>
+</head>
+<body onload="jsmeOnLoad()">
+<h1>Draw Your Molecule</h1>
+<div id="jsme_container"></div>
+<button type="button" onclick="getSmiles()">Generate SMILES</button>
+<form method="post" action="/submit_smiles/">
+	{% csrf_token %}
+	<input type="hidden" name="smiles" id="smiles_output">
+	<button type="submit">Submit SMILES</button>
+</form>
+</body>
+</html> 
+Filename: process_sequence.html  
+--------------------  
+<!DOCTYPE html>
+<html>
+<head>
+	<title>AlphaFold Integration</title>
+</head>
+<body>
+<h1>Submit Sequence for 3D Structure Prediction</h1>
+<form method="post" action="/process_sequence/">
+	{% csrf_token %}
+	<label for="sequence">Enter Sequence:</label>
+	<textarea id="sequence" name="sequence" rows="4" cols="50" required></textarea><br>
+	<label for="sequence_type">Sequence Type:</label>
+	<select name="sequence_type">
+		<option value="peptide">Peptide</option>
+		<option value="nucleotide">Nucleotide</option>
+	</select><br>
+	<button type="submit">Submit</button>
+</form>
+</body>
+</html> 
+Filename: select_target.html  
+--------------------  
+{% extends "app/layout.html" %}
+
+{% block title %}Select Target{% endblock %}
+
+{% block content %}
+<h1>Select a Target</h1>
+<ul>
+	{% for target in targets %}
+	<li>
+		{{ target.name }} ({{ target.pdb_id }})
+		<!-- Link to select compound and perform docking -->
+		<a href="{% url 'perform_docking' target.id compound.id %}">Dock</a>
+	</li>
+	{% empty %}
+	<li>No targets available.</li>
+	{% endfor %}
+</ul>
+{% endblock %} 
+Filename: sequence_conversion.html  
+--------------------  
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Sequence Conversion</title>
+</head>
+<body>
+<h1>Convert Your Sequence</h1>
+<form method="post" action="/convert_sequence/">
+	{% csrf_token %}
+	<label for="sequence">Enter Sequence:</label>
+	<input type="text" id="sequence" name="sequence" required>
+	<select name="sequence_type">
+		<option value="peptide">Peptide</option>
+		<option value="nucleotide">Nucleotide</option>
+	</select>
+	<button type="submit">Convert</button>
+</form>
+</body>
+</html> 
+Filename: success.html  
+--------------------  
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Success</title>
+</head>
+<body>
+<h1>Operation Successful!</h1>
+<p>Your compound has been uploaded successfully.</p>
+</body>
+</html> 
+Filename: upload_compound.html  
+--------------------  
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Upload Compound</title>
+</head>
+<body>
+<h1>Upload Compound Structure</h1>
+<form method="post" enctype="multipart/form-data">
+	{% csrf_token %}
+	{{ form.as_p }}
+	<button type="submit">Upload</button>
+</form>
+</body>
+</html> 
+utils.py:
+import os
+import re
+import subprocess
+from datetime import datetime
+from rdkit import Chem
+from rdkit.Chem import AllChem
+from rdkit.DataStructs import TanimotoSimilarity
+
+def validate_smiles(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    return mol is not None
+
+def run_autodock_vina(target_pdbqt, ligand_pdbqt, output_file, config_file=None):
+    # Runs AutoDock Vina docking simulation
+    command = ["vina", "--receptor", target_pdbqt, "--ligand", ligand_pdbqt, "--out", output_file]
+    if config_file:
+        command.extend(["--config", config_file])
+
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        return {
+            "success": True,
+            "output": result.stdout,
+            "errors": result.stderr,
+        }
+    except subprocess.CalledProcessError as e:
+        return {
+            "success": False,
+            "output": e.stdout,
+            "errors": e.stderr,
+        }
+
+def parse_affinity_scores(vina_output):
+    # Parses affinity scores from AutoDock Vina output
+    scores = []
+    # This regex might match multiple lines; ensure correct pattern depending on vina output format
+    pattern = re.compile(r"^\s*(-?\d+\.\d+)", re.MULTILINE)
+    for match in pattern.findall(vina_output):
+        scores.append(float(match.strip()))
+    return scores
+
+def calculate_tanimoto(smiles_1, smiles_2):
+    # Calculates the Tanimoto similarity between two SMILES
+    mol1 = Chem.MolFromSmiles(smiles_1)
+    mol2 = Chem.MolFromSmiles(smiles_2)
+    if mol1 is None or mol2 is None:
+        raise ValueError("Invalid SMILES strings provided.")
+
+    fp1 = AllChem.GetMorganFingerprintAsBitVect(mol1, 2)
+    fp2 = AllChem.GetMorganFingerprintAsBitVect(mol2, 2)
+    return TanimotoSimilarity(fp1, fp2)
+
+def peptide_to_smiles(sequence):
+    # Converts a peptide sequence to SMILES using PepSMI
+    # Ensure that 'pepsmi' is installed and accessible on PATH
+    # If not available, implement a fallback or raise an error
+    try:
+        result = subprocess.run(['pepsmi', '-seq', sequence], capture_output=True, text=True, check=True)
+        smiles = result.stdout.strip()
+        if not validate_smiles(smiles):
+            raise ValueError("PepSMI returned invalid SMILES.")
+        return smiles
+    except subprocess.CalledProcessError as e:
+        raise ValueError(f"Error converting peptide sequence to SMILES: {e.stderr}")
+
+def nucleotide_to_pdb(sequence):
+    # Placeholder for converting nucleotide sequences to PDB via AlphaFold or another tool
+    # This would likely involve:
+    # 1. Running AlphaFold on the nucleotide sequence
+    # 2. Converting resulting CIF to PDB
+    raise NotImplementedError("Nucleotide-to-PDB conversion via AlphaFold is required.")
+
+def convert_cif_to_pdb(cif_path, output_pdb_path):
+    # Converts a CIF file to a PDB file using Open Babel
+    command = ["obabel", cif_path, "-O", output_pdb_path]
+    try:
+        subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"CIF-to-PDB conversion failed: {e.stderr}")
+
+def run_alphafold(sequence, output_dir, model_preset="monomer"):
+    # Runs AlphaFold for generating a 3D structure for the given sequence.
+    # Ensure AlphaFold is installed and accessible.
+    fasta_path = os.path.join(output_dir, "input_sequence.fasta")
+    with open(fasta_path, "w") as fasta_file:
+        fasta_file.write(f">input_sequence\n{sequence}\n")
+
+    max_template_date = datetime.now().strftime("%Y-%m-%d")
+    alphafold_command = [
+        "alphafold",
+        f"--fasta_paths={fasta_path}",
+        f"--output_dir={output_dir}",
+        f"--model_preset={model_preset}",
+        f"--max_template_date={max_template_date}",
+    ]
+
+    try:
+        subprocess.run(alphafold_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cif_file_path = os.path.join(output_dir, "model_1.cif")
+        if not os.path.exists(cif_file_path):
+            raise RuntimeError("AlphaFold did not generate the expected CIF file.")
+
+        pdb_file_path = cif_file_path.replace(".cif", ".pdb")
+        convert_cif_to_pdb(cif_file_path, pdb_file_path)
+        return pdb_file_path
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"AlphaFold execution failed: {e.stderr}")
+
+def prepare_ligand(pdb_path, output_pdbqt_path):
+    # Prepares a ligand in PDB format into PDBQT format using AutoDockTools scripts
+    # Ensure 'prepare_ligand4.py' is installed and accessible
+    command = [
+        "prepare_ligand4.py",
+        "-l", pdb_path,
+        "-o", output_pdbqt_path,
+        "-U", "nphs_lps_waters",
+    ]
+    try:
+        subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Ligand preparation failed: {e.stderr}")
+models.py
+from django.db import models
+
+class Target(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    name = models.CharField(max_length=255)
+    description = models.TextField()
+    pdb_id = models.CharField(max_length=10)
+
+    def __str__(self):
+        return self.name
+
+class Compound(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    STRUCTURE_CHOICES = [
+        ('SMILES', 'SMILES'),
+        ('PDB', 'PDB'),
+    ]
+    name = models.CharField(max_length=255)
+    smiles = models.TextField(blank=True, null=True)
+    pdb_file = models.FileField(upload_to='pdb_files/', blank=True, null=True)
+    structure_type = models.CharField(max_length=50, choices=STRUCTURE_CHOICES)
+    affinity_score = models.FloatField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+class DrugLibrary(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    name = models.CharField(max_length=255)
+    smiles = models.TextField()
+
+    def __str__(self):
+        return self.name
+Focus only on checking and implementing functionality from utils.py file as it is not working

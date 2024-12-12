@@ -65,8 +65,8 @@ def initialize_browser():
 
     # URLs for each model
     urls = {
-        "o1": "https://chat.openai.com/?model=o1",
-        "o1-mini": "https://chat.openai.com/?model=o1-mini",
+        "o1": "https://chat.openai.com/?model=gpt-4o",
+        "o1-mini": "https://chat.openai.com/?model=gpt-4o",
         "gpt-4o": "https://chat.openai.com/?model=gpt-4o",
     }
     # Open tabs for each model
@@ -223,13 +223,10 @@ Understand the user's main task and identify missing details, preferred methods,
 ### Constraints and Assumptions:
 - **Constraints:**
   1. Avoid making assumptions about user preferences without clarification.
-  2. Avoid using similar questions.
+  2. Avoid using similar questions or tasks.
 - **Assumptions:**
   1. The user seeks a detailed understanding of their task.
   2. The generated subtasks are a draft and may need refinement.
-
-### Input:
-""" + objective + """
 
 ### Output Format:
 - **Clarifying Questions:** A list of 5-10 clarifying questions. For each question, provide a potential answer or suggest options if relevant.
@@ -238,7 +235,7 @@ Understand the user's main task and identify missing details, preferred methods,
   1. [Summarize any critical information or patterns from the user's input.]
   2. [Highlight connections between various aspects of the task.]
   3. [Mention any gaps or ambiguities in the provided information.]
-"""
+  """ + "\n ### Input:" + "\n" + objective
         )
         is_first_call = False
         # Use the 'o1-mini' model tab
@@ -258,16 +255,15 @@ You are an intelligent orchestrator managing GPT models designed for education a
 - **Constraints:**
   1. Focus only on the current subtask.
   2. Avoid duplicating information in the sub-tasks's context.
+  3. 
 - **Assumptions:**
   1. The subtask will contribute to the main task's completion.
 
-### Input:
-""" + objective + """
-
 ### Output Format:
-- Clear subtask description.
-- Context and requirements for the subtask. Relevant information from the overarching context that applies to this subtask.
-"""
+- Clear subtask description. Begin the subtask description with phrase: "You are a sub agent of most advanced Neuro orchestra. You must complete this sub-task:".
+- Context and requirements for the subtask. Provide insights into the user's preferences and objectives. If you ask sub-ahent to adjust the text or code, **make sure** that you **provide** this text or code here.
+
+""" + "### Input:" + "\n" + objective
     )
         # Use the 'o1-mini' model tab
         tab = tabs.get("o1-mini")
@@ -353,25 +349,25 @@ def gpt_sub_agent(sub_task_prompt):
     tab = tabs.get("gpt-4o")
     if tab is None:
         return ""
-    sub_task_prompt += (
+    sub_task_prompt = (
             """
 ### Instructions:
 1. Use the provided context to perform the subtask and **all** available features for completing this sub-task like **finding articles**, **talking to external sources**, **searching in the internet**, and so on.
-2. If the context is insufficient, propose 2-3 simple, alternative solutions that align with the overarching goal.
-3. Ensure none of the solutions are overly complex or deviate significantly from the task's scope.
+2. If the context is insufficient, propose 2 simple, alternative solutions that align with the overarching goal.
 4. Review the results to ensure they meet the requirements and are free of significant errors.
  
 
 ### Constraints and Assumptions:
 - **Constraints:**
   1. Do not introduce drastic changes to the MAIN task's approach.
+  2. DO NOT DESCRIBE WHAT YOU SHOULD DO. JUST DO IT.
 - **Assumptions:**
   1. Medium variations in implementation are acceptable.
 
 ### Output Format:
-- [Completed task **result or multiple solutions**, each described succinctly.]
+- [Completed BY YOU task **result or multiple solutions**(parts of text, code blocks, or both).]
 - Report any new information or insights gained during the task execution.
-"""
+""" + "\n" + sub_task_prompt
     )
     # Interact with GPT
     try:
@@ -388,7 +384,7 @@ def gpt_refine(objective):
 Analyze and finalize the results of all subtasks into a complete and cohesive solution for the main task.
 
 ### Instructions:
-1. Consolidate outputs from all subtasks into a cohesive result, ensuring logical flow and alignment with the main task.
+1. Consolidate outputs from all subtasks into a cohesive result(fully completed text or code), ensuring logical flow and alignment with the main task.
 2. Fill in any missing elements based on the task's context or assumptions where necessary.
 3. Validate and correct any inconsistencies or errors in the intermediate results.
 4. Ensure that the final solution fully addresses all aspects of the main task.
@@ -483,10 +479,8 @@ def main():
     # Write the refined output to a file with a timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_filename = f"output_{timestamp}.md"
-    chunk_size = 1024 * 1024  # 1MB chunks
     with open(output_filename, "w", encoding='utf-8') as file:
-        for i in range(0, len(refined_output), chunk_size):
-            file.write(refined_output[i:i + chunk_size])
+        file.write(refined_output)
     print(f"Output written to {output_filename}")
 
 if __name__ == "__main__":
