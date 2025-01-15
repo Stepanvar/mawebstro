@@ -1,4 +1,4 @@
-﻿import pychrome
+import pychrome
 import os
 import sys
 import time
@@ -8,6 +8,10 @@ import argparse
 from datetime import datetime
 import shutil
 import tempfile
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import re
+
 
 # Global variables to store tabs
 browser = None
