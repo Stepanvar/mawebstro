@@ -6,3 +6,4 @@
 /.vs
 /menv
 obj.txt
+output_*

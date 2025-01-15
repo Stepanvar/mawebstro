@@ -1,4 +1,4 @@
-import pychrome
+﻿import pychrome
 import os
 import sys
 import time
@@ -69,9 +69,9 @@ def initialize_browser():
 
     # URLs for each model
     urls = {
-        "o1": "https://chat.openai.com/?model=gpt-4o",
-        "o1-mini": "https://chat.openai.com/?model=gpt-4o",
-        "gpt-4o": "https://chat.openai.com/?model=gpt-4o",
+        "o1": "https://chatgpt.com/?model=gpt-4o",
+        "o1-mini": "https://chatgpt.com/?model=gpt-4o",
+        "gpt-4o": "https://chatgpt.com/?model=gpt-4o",
     }
     # Open tabs for each model
     for model_name, url in urls.items():
@@ -93,20 +93,24 @@ def initialize_browser():
     if "login" in current_url or "auth0" in current_url:
         input("Please log in to ChatGPT in the opened browser tabs. After logging in, press Enter here to continue...")
 
-def wait_for_selector(tab):
-    result = tab.Runtime.evaluate(
-        expression=f"document.querySelector('#prompt-textarea') !== null"
-    )["result"].get("value", False)
-    while not result:
-        time.sleep(0.5)
-        result = tab.Runtime.evaluate(
-            expression=f"document.querySelector('#prompt-textarea') !== null"
-        )["result"].get("value", False)
-
-import time
+def get_unique_sentences(text, threshold=0.7):
+    # Split text into sentences using regular expressions
+    sentences = re.split(r'(?<=[.!?]) +', text)
+    if not sentences or len(sentences) < 2:
+        return "Not enough sentences to remove duplicates." + "\n" + text
+    # Vectorize the sentences
+    vectorizer = TfidfVectorizer().fit_transform(sentences)
+    # Compute cosine similarity matrix
+    cosine_sim = cosine_similarity(vectorizer)
+    # Identify and remove similar sentences
+    unique_sentences = []
+    for idx, sentence in enumerate(sentences):
+        if all(cosine_sim[idx][i] < threshold for i in range(idx)):
+            unique_sentences.append(sentence)
+    return ' '.join(unique_sentences)
 
 def gpt_interact(tab, prompt, update_interval=2, timeout=120):
-    def wait_for_selector(tab, selector, timeout=30):
+    def wait_for_selector(tab, selector, timeout=10):
         start = time.time()
         while time.time() - start < timeout:
             result = tab.Runtime.evaluate(expression=f"document.querySelector('{selector}') !== null;")
@@ -115,27 +119,82 @@ def gpt_interact(tab, prompt, update_interval=2, timeout=120):
             time.sleep(0.5)
         raise TimeoutError(f"Selector {selector} not found within {timeout} seconds.")
 
+    def is_send_button_enabled(tab):
+        # Check if the send button is not disabled
+        check_button_js = """
+        (() => {
+            const testIds = ['send-button', 'composer-speech-button'];
+            for (const id of testIds) {
+                const btn = document.querySelector(`[data-testid="${id}"]`);
+                if (btn && !btn.disabled) {
+                    return true;
+                }
+            }
+            return false;
+        })();
+        """
+        result = tab.Runtime.evaluate(expression=check_button_js)
+        return result.get("result", {}).get("value", False)
+
+    def click_send_button(tab):
+        click_js = """
+        (() => {
+            const btn = document.querySelector('[data-testid="send-button"]');
+            if (btn) {
+                btn.click();
+                return true;
+            }
+            return false;
+        })();
+        """
+        result = tab.Runtime.evaluate(expression=click_js)
+        return result.get("result", {}).get("value", False)
+
+    # Retrieve the last response text from the DOM
+    def get_last_response_text(tab):
+        check_response_js = """
+        (() => {
+            const messages = document.querySelectorAll('div[class*="markdown"]');
+            if (messages.length === 0) return null;
+            const lastMessage = messages[messages.length - 1];
+            return lastMessage ? lastMessage.textContent : null;
+        })();
+        """
+        result = tab.Runtime.evaluate(expression=check_response_js)
+        return result.get("result", {}).get("value", None)
+
+    # Check if "Stop generating" or similar indicator is present
+    def is_generating(tab):
+        # Adjust selector or logic as needed if you have a known indicator:
+        # For example, if a "Stop generating" button with testid='stop-button' appears:
+        check_stop_js = """
+        (() => {
+            const stopBtn = document.querySelector('[data-testid="stop-button"]');
+            return stopBtn !== null;
+        })();
+        """
+        result = tab.Runtime.evaluate(expression=check_stop_js)
+        return result.get("result", {}).get("value", False)
+
     try:
-        # Wait for the prompt textarea to be available
+        # Wait for prompt textarea
         wait_for_selector(tab, '#prompt-textarea')
 
-        # Activate the tab and focus the textarea
+        # Focus the textarea
         browser.activate_tab(tab)
         tab.Runtime.evaluate(expression="document.querySelector('#prompt-textarea').focus();")
 
-        # Clear any existing text in the textarea
+        # Clear existing text
         clear_text_js = """
         var element = document.querySelector('#prompt-textarea');
-        element.value = '';
-        var event = new Event('input', { bubbles: true });
-        element.dispatchEvent(event);
+        element.value = "0"; //for send button not closed state 
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
         """
         tab.Runtime.evaluate(expression=clear_text_js)
 
-        # Set the prompt text directly
+        # Insert the prompt
         tab.call_method("Input.insertText", text=prompt)
-
-        # Dispatch input and change events to ensure the application registers the new text
         dispatch_events_js = """
             const textarea = document.querySelector('#prompt-textarea');
             textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -143,68 +202,62 @@ def gpt_interact(tab, prompt, update_interval=2, timeout=120):
         """
         tab.Runtime.evaluate(expression=dispatch_events_js)
 
-        # Submit the prompt by simulating the Enter key
-        tab.call_method("Input.dispatchKeyEvent", type="keyDown", key="Enter", code="Enter", text="\r")
-        tab.call_method("Input.dispatchKeyEvent", type="keyUp", key="Enter", code="Enter", text="\r")
+        # Wait for send button to be ready and enabled
+        wait_for_selector(tab, '[data-testid="send-button"]')
+        start_time = time.time()
+        while not is_send_button_enabled(tab):
+            if time.time() - start_time > timeout:
+                raise TimeoutError("Send button not enabled within timeout.")
+            time.sleep(0.5)
 
-        # Store the initial message count
-        message_count_js = """
-        (() => {
-            const messages = document.querySelectorAll('div[class*="markdown"]');
-            return messages.length;
-        })();
-        """
-        result = tab.Runtime.evaluate(expression=message_count_js)
-        message_count_before = result.get("result", {}).get("value", 0)
+        # Click the send button
+        if not click_send_button(tab):
+            raise RuntimeError("Failed to click the send button.")
 
-        # Initialize start time
+        # Now wait for the response
+        # Wait until a new message appears
+        initial_text = get_last_response_text(tab)
         start_time = time.time()
 
-        # Wait until the message count increases
+        # Wait for generation start: text changes or "stop" indicator
         while True:
-            result = tab.Runtime.evaluate(expression=message_count_js)
-            message_count_current = result.get("result", {}).get("value", 0)
-
-            if message_count_current > message_count_before:
-                break  # New message has appeared
-
-            elapsed_time = time.time() - start_time
-            if elapsed_time > timeout:
+            if time.time() - start_time > timeout:
+                print("Timed out waiting for response.")
                 break
-            else:
-                time.sleep(update_interval)  # Wait before checking again
+            current_text = get_last_response_text(tab)
+            if current_text and current_text != initial_text:
+                # Response started to appear
+                break
+            time.sleep(update_interval)
 
-        # Now retrieve the response text
-        previous_text = ""
+        # Now wait for the response to stabilize
+        # We'll wait until text no longer changes for a few consecutive checks
+        stable_count = 0
+        previous_text = get_last_response_text(tab)
         start_time = time.time()
-        while True:
-            # JavaScript to retrieve the last message text
-            check_response_js = """
-            (() => {
-                const messages = document.querySelectorAll('div[class*="markdown"]');
-                const lastMessage = messages[messages.length - 1];
-                if (lastMessage) {
-                    return lastMessage.textContent.trim();
-                }
-                return null;
-            })();
-            """
-            result = tab.Runtime.evaluate(expression=check_response_js)
-            response_text = result.get("result", {}).get("value", None)
 
-            if response_text:
-                if previous_text == response_text:
-                    # No change in response text; assume response is complete
-                    return response_text
-                previous_text = response_text
-            elapsed_time = time.time() - start_time
-            if elapsed_time > timeout:
-                return response_text
+        while True:
+            time.sleep(2)
+            current_text = get_last_response_text(tab)
+
+            # If generating indicator is known (like a stop button), we can also rely on its disappearance
+            # If none available, just rely on text stability
+            if current_text == previous_text and current_text is not None:
+                stable_count += 1
             else:
-                time.sleep(4)  # Check every 4 seconds
+                stable_count = 0
+
+            # Consider it stable if no change for a few consecutive checks
+            if stable_count >= 3 and not is_generating(tab):
+                # 3 checks with no change and no ongoing generation
+                return current_text
+
+            previous_text = current_text
+            if time.time() - start_time > timeout:
+                print("Timed out waiting for response to stabilize.")
+                return current_text
 
     except Exception as e:
-        # Handle or log exceptions as needed
         raise e
 
 def gpt_orchestrator(objective):
@@ -234,7 +287,7 @@ Understand the user's main task and identify missing details, preferred methods,
 
 ### Output Format:
 - **Clarifying Questions:** A list of 5-10 clarifying questions. For each question, provide a potential answer or suggest options if relevant.
-- **Preliminary Subtasks:** A numbered list of subtasks based on the task description.
+- **Preliminary Subtasks:** A **numbered** list of subtasks based on the task description.
 - **Key Insights:**
   1. [Summarize any critical information or patterns from the user's input.]
   2. [Highlight connections between various aspects of the task.]
@@ -250,23 +303,26 @@ Understand the user's main task and identify missing details, preferred methods,
 You are an intelligent orchestrator managing GPT models designed for education and code generation. Generate a clear and specific prompt for executing a subtask, incorporating all relevant context.
 
 ### Instructions:
-1. Identify the next subtask from the provided list.
+1. Identify the next subtask from the **previously generated** list.
 2. Extract only the context necessary for this subtask and ensure it provides all required details for execution.
 3. Define the required output format for the subtask.
-4. If all sub-tasks are complete **maximum 10**, start with: **"All tasks are complete."** and provide no further tasks. Please be **attentive** and precise of it.
+4. Find in all provided by user information and write block of text or code that will help sub-agent to understand the subtask.
+5. IF AND ONLY IF all sub-tasks are complete **maximum 10** (minimum 4), write: **"All tasks are complete."** and provide no further tasks.
 
 ### Constraints and Assumptions:
 - **Constraints:**
   1. Focus only on the current subtask.
   2. Avoid duplicating information in the sub-tasks's context.
-  3. 
+  3. Be very attentive and professional at monitoring current status of task(amount of sub-tasks completed, which only should be completed).
 - **Assumptions:**
   1. The subtask will contribute to the main task's completion.
 
 ### Output Format:
-- Clear subtask description. Begin the subtask description with phrase: "You are a sub agent of most advanced Neuro orchestra. You must complete this sub-task:".
-- Context and requirements for the subtask. Provide insights into the user's preferences and objectives. If you ask sub-ahent to adjust the text or code, **make sure** that you **provide** this text or code here.
-
+- Amount of sub-tasks completed if any.
+- Clear subtask description with additional surrounding by newlines of subtask name. Begin the subtask description with phrase: "You are a sub agent of most advanced Neuro orchestra. You must complete this sub-task:".
+- Context and requirements for the subtask. Provide insights into the user's preferences and objectives. If you ask sub-agent to adjust the text or code, **make sure** that you **provide** desired text or code here.
+- Key block of text or code that user provided and that will help sub-agent to understand the subtask.
+- if sug-agent provided unadequate text or code, comlete the subtask by yourself and adjust task description for proper completion of next subtask.
 """ + "### Input:" + "\n" + objective
     )
         # Use the 'o1-mini' model tab
@@ -278,7 +334,8 @@ You are an intelligent orchestrator managing GPT models designed for education a
     try:
         response_text = gpt_interact(tab, prompt, 8)
     except TimeoutError as e:
-        response_text = ""
+        print(f"TimeoutError: {e}")
+        response_text = "response timed out, please create desired text by your own"
 
     return response_text
 
@@ -337,48 +394,40 @@ Create a structured and professional description of the task and its context, en
   1. [Summarize any critical patterns or themes in the user’s input.]
   2. [Highlight the most significant gaps in the provided details.]
   3. [Note any specific connections between subtasks and the main goal.]
-
 """
     )
 
     # Interact with GPT
     try:
-        response_text = gpt_interact(tab, prompt, 8)
+        response_text = gpt_interact(tab, prompt, 4)
     except TimeoutError as e:
+        print(f"TimeoutError: {e}")
         response_text = ""
-    return response_text
+    return user_input + "\n" + response_text
 
-def gpt_sub_agent(sub_task_prompt):
+def gpt_sub_agent(sub_task_part_prompt):
     # Use the 'gpt-4o' model tab
     tab = tabs.get("gpt-4o")
     if tab is None:
         return ""
     sub_task_prompt = (
             """
-### Instructions:
-1. Use the provided context to perform the subtask and **all** available features for completing this sub-task like **finding articles**, **talking to external sources**, **searching in the internet**, and so on.
-2. If the context is insufficient, propose 2 simple, alternative solutions that align with the overarching goal.
-4. Review the results to ensure they meet the requirements and are free of significant errors.
- 
-
-### Constraints and Assumptions:
+### Penalties:
+IF YOU PROVIDE ANYTHING ELSE OTHER THAN THE RESULT IN THE DESIRED OUTPUT FORMAT, YOU WILL BE PENALIZED BY 10000000000 POINTS.
+## Constraints and Assumptions:
 - **Constraints:**
-  1. Do not introduce drastic changes to the MAIN task's approach.
-  2. DO NOT DESCRIBE WHAT YOU SHOULD DO. JUST DO IT.
-- **Assumptions:**
-  1. Medium variations in implementation are acceptable.
-
+1. Avoid writing amount of completed sub-tasks.
 ### Output Format:
-- [Completed BY YOU task **result or multiple solutions**(parts of text, code blocks, or both).]
+- [**Result or multiple solutions** of completed by you task(parts of text, code blocks, or both) inside the answer also.]
 - Report any new information or insights gained during the task execution.
-""" + "\n" + sub_task_prompt
+""" + "\n" + sub_task_part_prompt
     )
     # Interact with GPT
     try:
-        response_text = gpt_interact(tab, sub_task_prompt)
+        response_text = gpt_interact(tab, sub_task_prompt, 6)
     except TimeoutError as e:
-        response_text = ""
-
+        print(f"TimeoutError: {e}")
+        response_text = "response timed out, please create desired text by your own"
     return response_text
 
 def gpt_refine(objective):
@@ -409,12 +458,13 @@ Analyze and finalize the results of all subtasks into a complete and cohesive so
     )
 
     # Use the 'o1' model tab
-    tab = tabs.get("o1-mini")
+    tab = tabs.get("o1")
 
     # Interact with GPT
     try:
-        response_text = gpt_interact(tab, prompt, 15)
+        response_text = gpt_interact(tab, prompt, 8)
     except TimeoutError as e:
+        print(e)
         response_text = ""
     return response_text
 
@@ -469,12 +519,15 @@ def main():
                 break
             else:
                 # Execute the sub-task using the GPT sub-agent
-                sub_task_result = gpt_sub_agent(gpt_result)
+                objective = gpt_sub_agent(gpt_result)
+                unique_text = get_unique_sentences(gpt_result + objective)
                 # Update the objective with the sub-task result for the next iteration
-                objective = sub_task_result
                 time.sleep(1)
                 # Write the updated objective to the file
-                file.write(objective + '\n')
+                file.write(unique_text + '\n')
+                if len(unique_text) > 500:
+                    print("text sucessfully deduplicated and written to file")
+                    objective = unique_text
         with open('gpt_all_context.txt', 'r', encoding='utf-8') as file:
             gpt_all_context = file.read()
     # Refine the final output using the GPT refine function
